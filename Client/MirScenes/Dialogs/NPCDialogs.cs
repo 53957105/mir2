@@ -12,7 +12,6 @@ using Client.MirNetwork;
 using Client.MirObjects;
 using Client.MirSounds;
 using Font = System.Drawing.Font;
-using S = ServerPackets;
 using C = ClientPackets;
 using Effect = Client.MirObjects.Effect;
 
@@ -409,6 +408,7 @@ namespace Client.MirScenes.Dialogs
             GameScene.Scene.TrustMerchantDialog.Hide();
             GameScene.Scene.QuestListDialog.Hide();
             GameScene.Scene.InventoryDialog.Location = new Point(0, 0);
+            GameScene.Scene.RollControl.Hide();
         }
 
         public override void Show()
@@ -1825,7 +1825,7 @@ namespace Client.MirScenes.Dialogs
 
                     if (slot == null || tool.Info.Index != slot.Info.Index || slot.CurrentDura < 1000M) continue;
 
-                    var cell = GameScene.Scene.InventoryDialog.GetCell(slot.UniqueID);
+                    var cell = GameScene.Scene.InventoryDialog.GetCell(slot.UniqueID) ?? GameScene.Scene.BeltDialog.GetCell(slot.UniqueID);
 
                     if (cell.Locked) continue;
 
@@ -1852,7 +1852,7 @@ namespace Client.MirScenes.Dialogs
                     if (slot.Count < ingredient.Count) continue;
                     if (ingredient.CurrentDura < ingredient.MaxDura && slot.CurrentDura < ingredient.CurrentDura) continue;
 
-                    var cell = GameScene.Scene.InventoryDialog.GetCell(slot.UniqueID);
+                    var cell = GameScene.Scene.InventoryDialog.GetCell(slot.UniqueID) ?? GameScene.Scene.BeltDialog.GetCell(slot.UniqueID);
 
                     if (cell.Locked) continue;
 
@@ -2115,6 +2115,8 @@ namespace Client.MirScenes.Dialogs
 
         public override void Hide()
         {
+            if (!Visible) return;
+
             Visible = false;
             RefineCancel();
         }

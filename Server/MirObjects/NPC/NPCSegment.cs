@@ -1070,6 +1070,16 @@ namespace Server.MirObjects
 
                     acts.Add(new NPCActions(ActionType.UnequipItem, type));
                     break;
+                case "ROLLDIE":
+                    if (parts.Length < 3) return;
+
+                    acts.Add(new NPCActions(ActionType.RollDie, parts[1], parts[2]));
+                    break;
+                case "ROLLYUT":
+                    if (parts.Length < 3) return;
+
+                    acts.Add(new NPCActions(ActionType.RollYut, parts[1], parts[2]));
+                    break;
             }
         }
 
@@ -1393,6 +1403,9 @@ namespace Server.MirObjects
                     if (player.MyGuild == null) return "No Guild";
                     else
                         newValue = player.MyGuild.Name + " Guild";
+                    break;
+                case "ROLLRESULT":
+                    newValue = player.NPCData.TryGetValue("NPCRollResult", out object _rollResult) ? _rollResult.ToString() : "Not Rolled";
                     break;
 
                 default:
@@ -2674,7 +2687,10 @@ namespace Server.MirObjects
                         param[j] = param[j].Replace(part, ReplaceValue(player, part));
                     }
 
-                    param[j] = param[j].Replace("%INPUTSTR", player.NPCInputStr);
+                    if (player.NPCData.TryGetValue("NPCInputStr", out object _npcInputStr))
+                    {
+                        param[j] = param[j].Replace("%INPUTSTR", (string)_npcInputStr);
+                    }
                 }
 
                 switch (act.Type)
@@ -3148,7 +3164,7 @@ namespace Server.MirObjects
 
                     case ActionType.Goto:
                         {
-                            DelayedAction action = new DelayedAction(DelayedType.NPC, -1, player.NPCObjectID, "[" + param[0] + "]");
+                            DelayedAction action = new DelayedAction(DelayedType.NPC, -1, player.NPCObjectID, player.NPCScriptID, "[" + param[0] + "]");
                             player.ActionList.Add(action);
                         }
                         break;
@@ -3157,7 +3173,7 @@ namespace Server.MirObjects
                         {
                             if (!int.TryParse(param[0], out int scriptID)) return;
 
-                            var action = new DelayedAction(DelayedType.NPC, -1, player.NPCObjectID, "[@MAIN]", scriptID);
+                            var action = new DelayedAction(DelayedType.NPC, -1, player.NPCObjectID, scriptID, "[@MAIN]");
                             player.ActionList.Add(action);
                         }
                         break;
@@ -3247,7 +3263,7 @@ namespace Server.MirObjects
                             Map tempMap = player.CurrentMap;
                             Point tempPoint = player.CurrentLocation;
 
-                            var action = new DelayedAction(DelayedType.NPC, Envir.Time + (tempLong * 1000), player.NPCObjectID, tempString, tempMap, tempPoint);
+                            var action = new DelayedAction(DelayedType.NPC, Envir.Time + (tempLong * 1000), player.NPCObjectID, player.NPCScriptID, tempString, tempMap, tempPoint);
                             player.ActionList.Add(action);
                         }
                         break;
@@ -3263,7 +3279,7 @@ namespace Server.MirObjects
                             {
                                 var groupMember = player.GroupMembers[j];
 
-                                var action = new DelayedAction(DelayedType.NPC, Envir.Time + (tempLong * 1000), player.NPCObjectID, tempString, player.CurrentMap, player.CurrentLocation);
+                                var action = new DelayedAction(DelayedType.NPC, Envir.Time + (tempLong * 1000), player.NPCObjectID, player.NPCScriptID, tempString, player.CurrentMap, player.CurrentLocation);
                                 groupMember.ActionList.Add(action);
                             }
                         }
@@ -3282,7 +3298,7 @@ namespace Server.MirObjects
                         {
                             if (!long.TryParse(param[0], out long tempLong)) return;
 
-                            var action = new DelayedAction(DelayedType.NPC, Envir.Time + (tempLong * 1000), player.NPCObjectID, "[" + param[1] + "]");
+                            var action = new DelayedAction(DelayedType.NPC, Envir.Time + (tempLong * 1000), player.NPCObjectID, player.NPCScriptID, "[" + param[1] + "]");
                             player.ActionList.Add(action);
                         }
                         break;
@@ -3391,7 +3407,7 @@ namespace Server.MirObjects
                             bool.TryParse(param[3], out bool visible);
                             bool.TryParse(param[4], out bool stackable);
 
-                            player.AddBuff((BuffType)(byte)Enum.Parse(typeof(BuffType), param[0], true), player, Settings.Second * duration, new Stats(), visible, infinite, stackable);
+                            player.AddBuff((BuffType)(byte)Enum.Parse(typeof(BuffType), param[0], true), player, Settings.Second * duration, new Stats(), visible);
                         }
                         break;
 
@@ -3518,7 +3534,7 @@ namespace Server.MirObjects
 
                             for (int j = 0; j < player.GroupMembers.Count(); j++)
                             {
-                                var action = new DelayedAction(DelayedType.NPC, Envir.Time, player.NPCObjectID, "[" + param[0] + "]");
+                                var action = new DelayedAction(DelayedType.NPC, Envir.Time, player.NPCObjectID, player.NPCScriptID, "[" + param[0] + "]");
                                 player.GroupMembers[j].ActionList.Add(action);
                             }
                         }
@@ -3526,10 +3542,12 @@ namespace Server.MirObjects
 
                     case ActionType.EnterMap:
                         {
-                            if (player.NPCMoveMap == null || player.NPCMoveCoord.IsEmpty) return;
-                            player.Teleport(player.NPCMoveMap, player.NPCMoveCoord, false);
-                            player.NPCMoveMap = null;
-                            player.NPCMoveCoord = Point.Empty;
+                            if (!player.NPCData.TryGetValue("NPCMoveMap", out object _npcMoveMap) || !player.NPCData.TryGetValue("NPCMoveCoord", out object _npcMoveCoord)) return;
+
+                            player.Teleport((Map)_npcMoveMap, (Point)_npcMoveCoord, false);
+
+                            player.NPCData.Remove("NPCMoveMap");
+                            player.NPCData.Remove("NPCMoveCoord");
                         }
                         break;
 
@@ -3819,6 +3837,30 @@ namespace Server.MirObjects
                             player.RefreshStats();
                         }
                         break;
+                    case ActionType.RollDie:
+                        {
+                            bool.TryParse(param[1], out bool autoRoll);
+
+                            var result = Envir.Random.Next(1, 7);
+
+                            S.Roll p = new S.Roll { Type = 0, Page = param[0], AutoRoll = autoRoll, Result = result };
+
+                            player.NPCData["NPCRollResult"] = result;
+                            player.Enqueue(p);
+                        }
+                        break;
+                    case ActionType.RollYut:
+                        {
+                            bool.TryParse(param[1], out bool autoRoll);
+
+                            var result = Envir.Random.Next(1, 7);
+
+                            S.Roll p = new S.Roll { Type = 1, Page = param[0], AutoRoll = autoRoll, Result = result };
+
+                            player.NPCData["NPCRollResult"] = result;
+                            player.Enqueue(p);
+                        }
+                        break;
                 }
             }
         }
@@ -3982,7 +4024,7 @@ namespace Server.MirObjects
                             bool.TryParse(param[3], out bool visible);
                             bool.TryParse(param[4], out bool stackable);
 
-                            monster.AddBuff((BuffType)(byte)Enum.Parse(typeof(BuffType), param[0], true), monster, Settings.Second * tempInt, new Stats(), visible, infinite, stackable);
+                            monster.AddBuff((BuffType)(byte)Enum.Parse(typeof(BuffType), param[0], true), monster, Settings.Second * tempInt, new Stats(), visible);
                         }
                         break;
 
