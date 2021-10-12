@@ -50,7 +50,7 @@ namespace Server.MirObjects.Monsters
         {
             if (Stoned) return null;
 
-            return base.AddBuff(type, owner, duration, Stats, refreshStats, values);
+            return base.AddBuff(type, owner, duration, stats, refreshStats, values);
         }
 
         public override bool IsFriendlyTarget(PlayerObject ally)
@@ -159,6 +159,9 @@ namespace Server.MirObjects.Monsters
             CellTime = Envir.Time + 500;
             ActionTime = Envir.Time + 300;
             MoveTime = Envir.Time + MoveSpeed;
+
+            if (MoveTime > AttackTime)
+                AttackTime = MoveTime;
 
             InSafeZone = CurrentMap.GetSafeZone(CurrentLocation) != null;
 

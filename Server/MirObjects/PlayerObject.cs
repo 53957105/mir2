@@ -6253,7 +6253,9 @@ namespace Server.MirObjects
                 MineDrop Drop = Mine.Drops[i];
                 if ((Drop.MinSlot <= Slot) && (Drop.MaxSlot >= Slot) && (Drop.Item != null))
                 {
-                    UserItem item = Envir.CreateDropItem(Drop.Item);
+                    var info = Envir.GetItemInfo(Drop.Item.Index);
+
+                    UserItem item = Envir.CreateDropItem(info);
                     if (item.Info.Type == ItemType.Ore)
                     {
                         item.CurrentDura = (ushort)Math.Min(ushort.MaxValue, (Drop.MinDura + Envir.Random.Next(Math.Max(0, Drop.MaxDura - Drop.MinDura))) * 1000);
@@ -11608,7 +11610,7 @@ namespace Server.MirObjects
                     break;
                 case ItemType.Transform: //Transforms
                     {
-                        AddBuff(BuffType.Transform, this, (Settings.Second * item.Info.Durability), new Stats(), false, item.Info.Shape);
+                        AddBuff(BuffType.Transform, this, (Settings.Second * item.Info.Durability), new Stats(), true, item.Info.Shape);
                     }
                     break;
                 case ItemType.Deco:
