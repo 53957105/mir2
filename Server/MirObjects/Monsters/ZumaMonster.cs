@@ -1,9 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
 using System.Drawing;
-using System.Linq;
-using System.Text;
-using Server.MirDatabase;
+﻿using Server.MirDatabase;
 using Server.MirEnvir;
 using S = ServerPackets;
 
@@ -46,14 +42,14 @@ namespace Server.MirObjects.Monsters
 
             base.ApplyPoison(p, Caster, NoResist, ignoreDefence);
         }
-        public override Buff AddBuff(BuffType type, MapObject owner, int duration, Stats stats, bool refreshStats = true, params int[] values)
+        public override Buff AddBuff(BuffType type, MapObject owner, int duration, Stats stats, bool refreshStats = true, bool updateOnly = false, params int[] values)
         {
             if (Stoned) return null;
 
-            return base.AddBuff(type, owner, duration, stats, refreshStats, values);
+            return base.AddBuff(type, owner, duration, stats, refreshStats, updateOnly, values);
         }
 
-        public override bool IsFriendlyTarget(PlayerObject ally)
+        public override bool IsFriendlyTarget(HumanObject ally)
         {
             if (Stoned) return false;
 
@@ -116,7 +112,7 @@ namespace Server.MirObjects.Monsters
         {
             return !Stoned && base.IsAttackTarget(attacker);
         }
-        public override bool IsAttackTarget(PlayerObject attacker)
+        public override bool IsAttackTarget(HumanObject attacker)
         {
             return !Stoned && base.IsAttackTarget(attacker);
         }
@@ -199,6 +195,7 @@ namespace Server.MirObjects.Monsters
                 Poison = CurrentPoison,
                 Hidden = Hidden,
                 Extra = Stoned,
+                Buffs = Buffs.Where(d => d.Info.Visible).Select(e => e.Type).ToList()
             };
         }
     }

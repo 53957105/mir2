@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using Server.MirEnvir;
+﻿using Server.MirEnvir;
 
 namespace Server.MirObjects
 {
@@ -21,7 +17,11 @@ namespace Server.MirObjects
         Mine,
         NPC,
         Poison,
-        DamageIndicator
+        DamageIndicator,
+        Quest,
+
+        // Sanjian
+        SpellEffect,
     }
 
     public class DelayedAction

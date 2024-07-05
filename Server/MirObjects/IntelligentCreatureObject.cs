@@ -1,7 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
 using System.Drawing;
-using Server.MirDatabase;
+﻿using Server.MirDatabase;
 using Server.MirEnvir;
 using S = ServerPackets;
 
@@ -89,8 +87,7 @@ namespace Server.MirObjects
         }
 
 
-        protected internal IntelligentCreatureObject(MonsterInfo info)
-            : base(info)
+        public IntelligentCreatureObject(MonsterInfo info) : base(info)
         {
             ActionTime = Envir.Time + 1000;
             PetType = (IntelligentCreatureType)info.Effect;
@@ -461,10 +458,16 @@ namespace Server.MirObjects
             }
 
             bool remove = false;
-            if (TargetList[0] == null) remove = true;
-            if (TargetList[0].Race != ObjectType.Item) remove = true;
-            if (TargetList[0].Owner != null && TargetList[0].Owner != this && TargetList[0].Owner != Master && !IsMasterGroupMember(TargetList[0].Owner)) remove = true;
-            if (remove || TargetListTargetClean || TargetList[0].CurrentMap != CurrentMap)
+            MapObject targ = TargetList[0];
+            if (targ == null)
+                remove = true;
+            else
+            {
+                if (targ.CurrentMap != CurrentMap) remove = true;
+                if (targ.Race != ObjectType.Item) remove = true;
+                if (targ.Owner != null && targ.Owner != this && targ.Owner != Master && !IsMasterGroupMember(targ.Owner)) remove = true;
+            }
+            if (remove || TargetListTargetClean)
             {
                 TargetList.RemoveAt(0);
                 TargetListTargetClean = false;
@@ -472,7 +475,7 @@ namespace Server.MirObjects
                 return;
             }
 
-            Target = TargetList[0];
+            Target = targ;
 
             if (Target.CurrentLocation == CurrentLocation || (!CheckAndMoveTo(Target.CurrentLocation) && Functions.InRange(CurrentLocation, Target.CurrentLocation, 1)))
             {
@@ -555,7 +558,7 @@ namespace Server.MirObjects
             IncreasePearlProduction();
         }
 
-        protected bool DelayedAttack(long delay)
+        private bool DelayedAttack(long delay)
         {
             DelayedPickup(delay);
 
@@ -581,15 +584,16 @@ namespace Server.MirObjects
         {
             if (Dead || Master == null) return;
 
-            Cell cell = CurrentMap.GetCell(Target.CurrentLocation);
-            if (!cell.Valid || cell.Objects == null) return;
+            if (!CurrentMap.ValidPoint(location)) return;
+            Cell cell = CurrentMap.GetCell(location);
+            if (cell.Objects == null) return;
 
 
             int count = cell.Objects.Count;
 
             for (int i = 0; i < count; i++)
             {
-                PickUpItem(Target.CurrentLocation);
+                PickUpItem(location);
             }
         }
 
@@ -597,8 +601,9 @@ namespace Server.MirObjects
         {
             if (Dead || Master == null) return;
 
+            if (!CurrentMap.ValidPoint(location)) return;
             Cell cell = CurrentMap.GetCell(location);
-            if (!cell.Valid || cell.Objects == null) return;
+            if (cell.Objects == null) return;
             for (int i = 0; i < cell.Objects.Count; i++)
             {
                 MapObject ob = cell.Objects[i];
@@ -616,7 +621,7 @@ namespace Server.MirObjects
                         for (int j = 0; j < Master.GroupMembers.Count; j++)
                             Master.GroupMembers[j].ReceiveChat(Name + " Picked up: {" + item.Item.FriendlyName + "}", ChatType.Hint);
 
-                    if (item.Item.Info.Grade == ItemGrade.Mythical || item.Item.Info.Grade == ItemGrade.Legendary)
+                    if (item.Item.Info.Grade == ItemGrade.Mythical || item.Item.Info.Grade == ItemGrade.Legendary || item.Item.Info.Grade == ItemGrade.Heroic)
                     {
                         Master.ReceiveChat("Pet Picked up: {" + item.Item.FriendlyName + "}", ChatType.Hint);
                         ((PlayerObject)Master).Enqueue(new S.IntelligentCreaturePickup { ObjectID = ObjectID });
@@ -778,7 +783,7 @@ namespace Server.MirObjects
             if (type == ChatType.WhisperIn) CreatureSay("What?");
         }
 
-        public override bool IsAttackTarget(PlayerObject attacker)
+        public override bool IsAttackTarget(HumanObject attacker)
         {
             return false;
         }
@@ -786,7 +791,7 @@ namespace Server.MirObjects
         {
             return false;
         }
-        public override bool IsFriendlyTarget(PlayerObject ally)
+        public override bool IsFriendlyTarget(HumanObject ally)
         {
             return true;
         }
@@ -794,7 +799,7 @@ namespace Server.MirObjects
         {
             return true;
         }
-        public override int Attacked(PlayerObject attacker, int damage, DefenceType type = DefenceType.ACAgility, bool damageWeapon = true)
+        public override int Attacked(HumanObject attacker, int damage, DefenceType type = DefenceType.ACAgility, bool damageWeapon = true)
         {
             return 0;
         }
@@ -860,6 +865,7 @@ namespace Server.MirObjects
                 Poison = CurrentPoison,
                 Hidden = Hidden,
                 Extra = Summoned,
+                Buffs = Buffs.Where(d => d.Info.Visible).Select(e => e.Type).ToList()
             };
         }
     }

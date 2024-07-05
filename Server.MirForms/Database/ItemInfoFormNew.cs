@@ -1,16 +1,7 @@
 ﻿using Server.MirEnvir;
-using System;
-using System.Collections.Generic;
-using System.ComponentModel;
 using System.Data;
-using System.Drawing;
-using System.Globalization;
-using System.IO;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
-using System.Web.UI.WebControls;
-using System.Windows.Forms;
+using Microsoft.VisualBasic;
 
 namespace Server.Database
 {
@@ -22,11 +13,17 @@ namespace Server.Database
         private readonly Array BindEnums = Enum.GetValues(typeof(BindMode));
         private readonly Array SpecialEnums = Enum.GetValues(typeof(SpecialItemMode));
 
+        private bool _isInGemContext = false;
+        private Dictionary<int, string> _defaultItemHeaderMappings = new();
+        private Dictionary<int, string> _gemItemHeaderMappings = new();
+
         private DataTable Table;
 
         public ItemInfoFormNew()
         {
             InitializeComponent();
+
+            SetDoubleBuffered(itemInfoGridView);
 
             InitializeItemInfoFilters();
             InitializeItemInfoGridView();
@@ -34,16 +31,43 @@ namespace Server.Database
             CreateDynamicColumns();
 
             PopulateTable();
+
+            MapHeaderText();
+
+            // register after initializing data to prevent erroneous throws
+            itemInfoGridView.CellValueChanged += CellValueChanged;
+            itemInfoGridView.CellValidating += itemInfoGridView_CellValidating;
+            itemInfoGridView.MouseClick += ItemInfoGridView_MouseClick;
+            itemInfoGridView.SelectionChanged += ItemInfoGridView_SelectionChanged;
+        }
+
+        public static void SetDoubleBuffered(Control c)
+        {
+            System.Reflection.PropertyInfo aProp =
+                  typeof(Control).GetProperty(
+                        "DoubleBuffered",
+                        System.Reflection.BindingFlags.NonPublic |
+                        System.Reflection.BindingFlags.Instance);
+
+            aProp.SetValue(c, true, null);
         }
 
         private void InitializeItemInfoFilters()
         {
+            Dictionary<String, String> filterItems = new()
+            {
+                { "-1", "" }
+            };
+
             var types = Enum.GetValues(typeof(ItemType));
-            drpFilterType.Items.Add(new System.Web.UI.WebControls.ListItem("", "-1"));
             foreach (ItemType type in types)
             {
-                drpFilterType.Items.Add(new System.Web.UI.WebControls.ListItem(type.ToString(), ((byte)type).ToString()));
+                filterItems.Add(((byte)type).ToString(), type.ToString());
             }
+
+            drpFilterType.DataSource = new BindingSource(filterItems, null);
+            drpFilterType.DisplayMember = "Value";
+            drpFilterType.ValueMember = "Key";
         }
 
         private void InitializeItemInfoGridView()
@@ -66,36 +90,46 @@ namespace Server.Database
             ItemPrice.ValueType = typeof(uint);
             ItemToolTip.ValueType = typeof(string);
 
+            StartItem.ValueType = typeof(bool);
+            NeedIdentify.ValueType = typeof(bool);
+            ShowGroupPickup.ValueType = typeof(bool);
+            GlobalDropNotify.ValueType = typeof(bool);
+            ClassBased.ValueType = typeof(bool);
+            LevelBased.ValueType = typeof(bool);
+            CanMine.ValueType = typeof(bool);
+            CanFastRun.ValueType = typeof(bool);
+            CanAwakening.ValueType = typeof(bool);
+
             //Basic
-            this.ItemType.ValueType = typeof(ItemType);
-            this.ItemType.DataSource = Enum2DataTable<ItemType>();
-            this.ItemType.ValueMember = "Value";
-            this.ItemType.DisplayMember = "Display";
+            ItemType.ValueType = typeof(ItemType);
+            ItemType.DataSource = Enum2DataTable<ItemType>();
+            ItemType.ValueMember = "Value";
+            ItemType.DisplayMember = "Display";
 
-            this.ItemGrade.ValueType = typeof(ItemGrade);
-            this.ItemGrade.DataSource = Enum2DataTable<ItemGrade>();
-            this.ItemGrade.ValueMember = "Value";
-            this.ItemGrade.DisplayMember = "Display";
+            ItemGrade.ValueType = typeof(ItemGrade);
+            ItemGrade.DataSource = Enum2DataTable<ItemGrade>();
+            ItemGrade.ValueMember = "Value";
+            ItemGrade.DisplayMember = "Display";
 
-            this.ItemRequiredType.ValueType = typeof(RequiredType);
-            this.ItemRequiredType.DataSource = Enum2DataTable<RequiredType>();
-            this.ItemRequiredType.ValueMember = "Value";
-            this.ItemRequiredType.DisplayMember = "Display";
+            ItemRequiredType.ValueType = typeof(RequiredType);
+            ItemRequiredType.DataSource = Enum2DataTable<RequiredType>();
+            ItemRequiredType.ValueMember = "Value";
+            ItemRequiredType.DisplayMember = "Display";
 
-            this.ItemRequiredGender.ValueType = typeof(RequiredGender);
-            this.ItemRequiredGender.DataSource = Enum2DataTable<RequiredGender>();
-            this.ItemRequiredGender.ValueMember = "Value";
-            this.ItemRequiredGender.DisplayMember = "Display";
+            ItemRequiredGender.ValueType = typeof(RequiredGender);
+            ItemRequiredGender.DataSource = Enum2DataTable<RequiredGender>();
+            ItemRequiredGender.ValueMember = "Value";
+            ItemRequiredGender.DisplayMember = "Display";
 
-            this.ItemRequiredClass.ValueType = typeof(RequiredClass);
-            this.ItemRequiredClass.DataSource = Enum2DataTable<RequiredClass>();
-            this.ItemRequiredClass.ValueMember = "Value";
-            this.ItemRequiredClass.DisplayMember = "Display";
+            ItemRequiredClass.ValueType = typeof(RequiredClass);
+            ItemRequiredClass.DataSource = Enum2DataTable<RequiredClass>();
+            ItemRequiredClass.ValueMember = "Value";
+            ItemRequiredClass.DisplayMember = "Display";
 
-            this.ItemSet.ValueType = typeof(ItemSet);
-            this.ItemSet.DataSource = Enum2DataTable<ItemSet>();
-            this.ItemSet.ValueMember = "Value";
-            this.ItemSet.DisplayMember = "Display";
+            ItemSet.ValueType = typeof(ItemSet);
+            ItemSet.DataSource = Enum2DataTable<ItemSet>();
+            ItemSet.ValueMember = "Value";
+            ItemSet.DisplayMember = "Display";
         }
 
         public static DataTable Enum2DataTable<T>()
@@ -172,7 +206,6 @@ namespace Server.Database
 
                 itemInfoGridView.Columns.Add(col);
             }
-
         }
 
         private void PopulateTable()
@@ -213,6 +246,16 @@ namespace Server.Database
                 row["ItemPrice"] = item.Price;
                 row["ItemToolTip"] = item.ToolTip;
 
+                row["StartItem"] = item.StartItem;
+                row["NeedIdentify"] = item.NeedIdentify;
+                row["ShowGroupPickup"] = item.ShowGroupPickup;
+                row["GlobalDropNotify"] = item.GlobalDropNotify;
+                row["ClassBased"] = item.ClassBased;
+                row["LevelBased"] = item.LevelBased;
+                row["CanMine"] = item.CanMine;
+                row["CanFastRun"] = item.CanFastRun;
+                row["CanAwakening"] = item.CanAwakening;
+
                 foreach (Stat stat in StatEnums)
                 {
                     if (stat == Stat.Unknown) continue;
@@ -238,16 +281,24 @@ namespace Server.Database
             }
 
             itemInfoGridView.DataSource = Table;
+
+            itemInfoGridView.Columns["Modified"].ReadOnly = true;
         }
 
         private void UpdateFilter()
         {
-            var filterText = txtSearch.Text;
-            var filterType = ((ListItem)drpFilterType.SelectedItem)?.Value ?? "-1";
-
-            if (string.IsNullOrEmpty(filterText) && filterType == "-1")
+            if (itemInfoGridView.DataSource == null)
             {
-                (itemInfoGridView.DataSource as DataTable).DefaultView.RowFilter = "";
+                return;
+            }
+
+            var filterText = txtSearch.Text;
+            var filterType = ((KeyValuePair<string, string>)drpFilterType.SelectedItem).Key;
+
+            if (string.IsNullOrEmpty(filterText) &&
+                filterType == "-1")
+            {
+                (itemInfoGridView.DataSource as DataTable).DefaultView.RowFilter = string.Empty;
                 return;
             }
 
@@ -259,14 +310,16 @@ namespace Server.Database
         private void SaveForm()
         {
             int lastIndex = 0;
-            if (Envir.MonsterInfoList.Count > 0)
+            if (Envir.ItemInfoList.Count > 0)
             {
                 lastIndex = Envir.ItemInfoList.Max(x => x.Index);
             }
 
             foreach (DataGridViewRow row in itemInfoGridView.Rows)
             {
-                if (string.IsNullOrEmpty((string)row.Cells["ItemName"].Value))
+                var name = row.Cells["ItemName"].Value;
+
+                if (name == null || name.GetType() == typeof(System.DBNull) || string.IsNullOrWhiteSpace((string)name))
                 {
                     continue;
                 }
@@ -304,11 +357,21 @@ namespace Server.Database
                 item.Slots = (byte)row.Cells["ItemSlots"].Value;
                 item.Weight = (byte)row.Cells["ItemWeight"].Value;
 
+                item.StartItem = (bool)row.Cells["StartItem"].Value;
+                item.NeedIdentify = (bool)row.Cells["NeedIdentify"].Value;
+                item.ShowGroupPickup = (bool)row.Cells["ShowGroupPickup"].Value;
+                item.GlobalDropNotify = (bool)row.Cells["GlobalDropNotify"].Value;
+                item.ClassBased = (bool)row.Cells["ClassBased"].Value;
+                item.LevelBased = (bool)row.Cells["LevelBased"].Value;
+                item.CanMine = (bool)row.Cells["CanMine"].Value;
+                item.CanFastRun = (bool)row.Cells["CanFastRun"].Value;
+                item.CanAwakening = (bool)row.Cells["CanAwakening"].Value;
+
                 var light = ((byte)row.Cells["ItemLightRange"].Value % 15) + ((byte)row.Cells["ItemLightIntensity"].Value * 15);
                 item.Light = (byte)Math.Min(byte.MaxValue, light);
                 item.Durability = (ushort)row.Cells["ItemDurability"].Value;
                 item.Price = (uint)row.Cells["ItemPrice"].Value;
-                item.ToolTip = (string)row.Cells["ItemToolTip"].Value;
+                item.ToolTip = row.Cells["ItemToolTip"].Value.ToString();
 
                 item.Stats.Clear();
                 item.Bind = BindMode.None;
@@ -369,14 +432,13 @@ namespace Server.Database
         {
             var col = itemInfoGridView.Columns[e.ColumnIndex];
 
-            var cell = itemInfoGridView.Rows[e.RowIndex].Cells[col.Name];
-
-            if (cell.FormattedValue != null && e.FormattedValue != null && cell.FormattedValue.ToString() == e.FormattedValue.ToString())
+            if (col.Name.Equals("Modified", comparisonType: StringComparison.CurrentCultureIgnoreCase) ||
+                col.Name.Equals("ItemIndex", comparisonType: StringComparison.CurrentCultureIgnoreCase))
             {
                 return;
             }
 
-            itemInfoGridView.Rows[e.RowIndex].Cells["Modified"].Value = true;
+            var cell = itemInfoGridView.Rows[e.RowIndex].Cells[col.Name];
 
             var val = e.FormattedValue.ToString();
 
@@ -413,6 +475,11 @@ namespace Server.Database
             {
                 e.Cancel = true;
                 itemInfoGridView.Rows[e.RowIndex].ErrorText = "the value must be a long";
+            }
+
+            if (!e.Cancel)
+            {
+                itemInfoGridView.Rows[e.RowIndex].Cells["Modified"].Value = true;
             }
         }
 
@@ -498,6 +565,11 @@ namespace Server.Database
 
         private void rBtnViewSpecial_CheckedChanged(object sender, EventArgs e)
         {
+            var specialCols = new string[]
+            {
+                "StartItem", "NeedIdentify", "ShowGroupPickup", "GlobalDropNotify", "ClassBased", "LevelBased", "CanMine", "CanFastRun", "CanAwakening"
+            };
+
             if (rBtnViewSpecial.Checked)
             {
                 foreach (DataGridViewColumn col in itemInfoGridView.Columns)
@@ -513,6 +585,12 @@ namespace Server.Database
                         continue;
                     }
 
+                    if (specialCols.Contains(col.Name))
+                    {
+                        col.Visible = true;
+                        continue;
+                    }
+
                     col.Visible = false;
                 }
             }
@@ -520,16 +598,24 @@ namespace Server.Database
 
         private void drpFilterType_SelectedIndexChanged(object sender, EventArgs e)
         {
+            if (itemInfoGridView.DataSource == null)
+            {
+                return;
+            }
+
             UpdateFilter();
 
-            if (drpFilterType.Text == "Gem")
+            var filterType = ((KeyValuePair<string, string>)drpFilterType.SelectedItem).Value;
+
+            if (filterType == global::ItemType.Gem.ToString())
             {
-                //TODO - Change columns for gems when gem option is chosen.
+                SwapGemContext(true);
             }
             else
             {
-
+                SwapGemContext(false);
             }
+
         }
 
         private void txtSearch_KeyDown(object sender, KeyEventArgs e)
@@ -571,6 +657,8 @@ namespace Server.Database
 
                         int rowsEdited = 0;
 
+                        this.itemInfoGridView.CurrentCell = this.itemInfoGridView[1, 0];
+
                         for (int i = 1; i < rows.Length; i++)
                         {
                             var row = rows[i];
@@ -591,17 +679,17 @@ namespace Server.Database
 
                             var dataRow = FindRowByItemName(cells[0]);
 
-                            itemInfoGridView.BeginEdit(true);
-
-                            if (dataRow == null)
-                            {
-                                dataRow = Table.NewRow();
-
-                                Table.Rows.Add(dataRow);
-                            }
-
                             try
                             {
+                                itemInfoGridView.BeginEdit(true);
+
+                                if (dataRow == null)
+                                {
+                                    dataRow = Table.NewRow();
+
+                                    Table.Rows.Add(dataRow);
+                                }
+
                                 for (int j = 0; j < columns.Length; j++)
                                 {
                                     var column = columns[j];
@@ -636,15 +724,19 @@ namespace Server.Database
                                         }
                                     }
                                 }
+
+                                dataRow["Modified"] = true;
+
+                                itemInfoGridView.EndEdit();
                             }
-                            catch(Exception ex)
+                            catch (Exception ex)
                             {
                                 fileError = true;
+                                itemInfoGridView.EndEdit();
+
                                 MessageBox.Show($"Error when importing item {cells[0]}. {ex.Message}");
                                 continue;
                             }
-
-                            itemInfoGridView.EndEdit();
 
                             rowsEdited++;
 
@@ -656,6 +748,8 @@ namespace Server.Database
 
                         if (!fileError)
                         {
+                            itemInfoGridView.EditMode = DataGridViewEditMode.EditOnKeystrokeOrF2;
+
                             MessageBox.Show($"{rowsEdited} items have been imported.");
                         }
                     }
@@ -695,25 +789,36 @@ namespace Server.Database
                         {
                             int columnCount = itemInfoGridView.Columns.Count;
                             string columnNames = "";
-                            string[] outputCsv = new string[itemInfoGridView.Rows.Count + 1];
+                            var outputCsv = new List<string>(itemInfoGridView.Rows.Count + 1);
                             for (int i = 2; i < columnCount; i++)
                             {
                                 columnNames += itemInfoGridView.Columns[i].Name.ToString() + ",";
                             }
-                            outputCsv[0] += columnNames;
+                            outputCsv.Add(columnNames);
 
+                            var line = new StringBuilder();
                             for (int i = 1; (i - 1) < itemInfoGridView.Rows.Count; i++)
                             {
+                                line.Clear();
+
+                                var row = itemInfoGridView.Rows[i - 1];
+
+                                var name = row.Cells["ItemName"].Value;
+                                if (name == null || name.GetType() == typeof(System.DBNull) || string.IsNullOrWhiteSpace((string)name))
+                                {
+                                    continue;
+                                }
+
                                 for (int j = 2; j < columnCount; j++)
                                 {
-                                    var cell = itemInfoGridView.Rows[i - 1].Cells[j];
+                                    var cell = row.Cells[j];
 
                                     var col = itemInfoGridView.Columns[j];
 
                                     var valueType = col.ValueType;
                                     if (valueType.IsEnum)
                                     {
-                                        outputCsv[i] += ((Enum.ToObject(valueType, cell.Value ?? 0))?.ToString() ?? "") + ",";
+                                        line.Append(((Enum.ToObject(valueType, cell.Value ?? 0))?.ToString() ?? "") + ",");
                                     }
                                     else
                                     {
@@ -721,14 +826,17 @@ namespace Server.Database
 
                                         if (col.Name == "ItemToolTip")
                                         {
-                                            outputCsv[i] += $"\"{val.Replace("\r\n", "\\r\\n")}\",";
+                                            line.Append($"\"{val.Replace("\r\n", "\\r\\n")}\",");
                                         }
                                         else
                                         {
-                                            outputCsv[i] += $"{val},";
+                                            line.Append($"{val},");
                                         }
                                     }
                                 }
+
+                                if (line.Length > 0)
+                                    outputCsv.Add(line.ToString());
                             }
 
                             File.WriteAllLines(sfd.FileName, outputCsv, Encoding.UTF8);
@@ -774,6 +882,16 @@ namespace Server.Database
             row.Cells["ItemPrice"].Value = (uint)0;
             row.Cells["ItemToolTip"].Value = (string)"";
 
+            row.Cells["StartItem"].Value = false;
+            row.Cells["NeedIdentify"].Value = false;
+            row.Cells["ShowGroupPickup"].Value = false;
+            row.Cells["GlobalDropNotify"].Value = false;
+            row.Cells["ClassBased"].Value = false;
+            row.Cells["LevelBased"].Value = false;
+            row.Cells["CanMine"].Value = false;
+            row.Cells["CanFastRun"].Value = false;
+            row.Cells["CanAwakening"].Value = false;
+
             foreach (Stat stat in StatEnums)
             {
                 if (stat == Stat.Unknown) continue;
@@ -796,6 +914,57 @@ namespace Server.Database
             }
         }
 
+        private void ItemInfoGridView_MouseClick(object sender, MouseEventArgs e)
+        {
+            
+            if (e.Button == MouseButtons.Right &&
+                itemInfoGridView.SelectedRows.Count > 1)
+            {
+                var mouseOverRow = itemInfoGridView.HitTest(e.X, e.Y).RowIndex;
+                var mouseOverCol = itemInfoGridView.HitTest(e.X, e.Y).ColumnIndex;
+
+                if (mouseOverRow >= 0 &&
+                    mouseOverCol >= 0)
+                {
+                    var colName = itemInfoGridView.Rows[mouseOverRow].Cells[mouseOverCol].OwningColumn.HeaderText;
+
+                    if (colName == "Modified" ||
+                        colName == "Index" ||
+                        colName == "Name" ||
+                        itemInfoGridView.Rows[mouseOverRow].Cells[mouseOverCol] is DataGridViewComboBoxCell
+                        )
+                    {
+                        return;
+                    }
+
+                    String promptText = $"Enter new value for column [{colName}]:";
+                    if (itemInfoGridView.Rows[mouseOverRow].Cells[mouseOverCol] is DataGridViewCheckBoxCell)
+                    {
+                        promptText += $"{Environment.NewLine}[[Enter 1 for tick or 0 for untick]]";
+                    }
+
+                    var updateValue = Interaction.InputBox(promptText,
+                                                        "Bulk Update",
+                                                        String.Empty);
+
+                    if (!String.IsNullOrEmpty(updateValue))
+                    {
+                        foreach (DataGridViewRow selectedRow in itemInfoGridView.SelectedRows)
+                        {
+                            selectedRow.Cells[mouseOverCol].Value = updateValue;
+                        }
+
+                        // for some reason datagridview doesn't reflect selected cell value updating like this
+                        // so re-assigning value fixes it. 
+                        if(itemInfoGridView.Rows[mouseOverRow].Cells[mouseOverCol] is DataGridViewCheckBoxCell)
+                        {
+                            itemInfoGridView.Rows[mouseOverRow].Cells[mouseOverCol].Value = updateValue;
+                        }
+                    }
+                }
+            }
+        }
+
         private void itemInfoGridView_UserDeletingRow(object sender, DataGridViewRowCancelEventArgs e)
         {
             var row = e.Row;
@@ -810,15 +979,173 @@ namespace Server.Database
             }
         }
 
-        private void ItemInfoFormNew_FormClosed(object sender, FormClosedEventArgs e)
+        private void itemInfoGridView_DataError(object sender, DataGridViewDataErrorEventArgs e)
         {
+
+        }
+        private void Gameshop_button_Click(object sender, EventArgs e)
+        {
+            foreach (DataGridViewRow row in itemInfoGridView.Rows)
+            {
+                if (row.Selected && row.Cells["ItemIndex"].Value != null)
+                {
+                    int index = (int)row.Cells["ItemIndex"].Value;
+
+                    var item = Envir.ItemInfoList.FirstOrDefault(x => x.Index == index);
+
+                    Envir.AddToGameShop(item);
+                }
+            }
+
+            Envir.SaveDB();
+        }
+
+        private void CellValueChanged(object sender, DataGridViewCellEventArgs e)
+        {
+
+            if (itemInfoGridView.CurrentCell is DataGridViewComboBoxCell ||
+                itemInfoGridView.CurrentCell is DataGridViewCheckBoxCell &&
+                e.RowIndex != -1)
+            {
+                if (itemInfoGridView.Rows[e.RowIndex].DataBoundItem != null)
+                {
+                    itemInfoGridView.Rows[e.RowIndex].Cells["Modified"].Value = true;
+                }
+            }
+        }
+
+        private void ItemInfoGridView_SelectionChanged(object sender, EventArgs e)
+        {
+            if (itemInfoGridView.CurrentRow != null &&
+                itemInfoGridView.CurrentRow.Index != -1)
+            {
+                var itemType = itemInfoGridView.CurrentRow.Cells["ItemType"];
+                bool isGemSelected = (global::ItemType)itemType.Value == global::ItemType.Gem;
+                SwapGemContext(isGemSelected);
+            }   
+        }
+
+        private void CurrentCellDirtyStateChanged(object sender, EventArgs e)
+        {
+            if (itemInfoGridView.IsCurrentCellDirty)
+            {
+                itemInfoGridView.CommitEdit(DataGridViewDataErrorContexts.Commit);
+            }
+        }
+
+        private void ItemInfoFormNew_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            List<String> inError = new();
+            int indexColumn = itemInfoGridView.Columns["ItemIndex"].Index;
+            int nameColumn = itemInfoGridView.Columns["ItemName"].Index;
+
+            for (int i = 0; i < itemInfoGridView.RowCount; i++)
+            {
+                if (!String.IsNullOrEmpty(itemInfoGridView.Rows[i].ErrorText))
+                {
+                    inError.Add($"Index: [{itemInfoGridView.Rows[i].Cells[indexColumn].Value}] Item: [{itemInfoGridView.Rows[i].Cells[nameColumn].Value}]");
+                }
+            }
+
+            if (inError.Count > 0)
+            {
+                String msg = string.Join(Environment.NewLine, inError);
+                if (MessageBox.Show($"The following items are invalid: {msg}", "Discard Invalid Items?", MessageBoxButtons.OKCancel) != DialogResult.OK)
+                {
+                    e.Cancel = true;
+                    return;
+                }
+            }
+
             SaveForm();
             Envir.SaveDB();
         }
 
-        private void itemInfoGridView_DataError(object sender, DataGridViewDataErrorEventArgs e)
+        private void MapHeaderText()
         {
+            for (int i = 0; i < itemInfoGridView.ColumnCount; i++)
+            {
+                var col = itemInfoGridView.Columns[i];
 
+                _defaultItemHeaderMappings.Add(i, col.HeaderText);
+            }
+
+            foreach (var entry in _defaultItemHeaderMappings)
+            {
+                switch (entry.Value.Trim())
+                {
+                    case nameof(SpecialItemMode.Paralize):
+                        _gemItemHeaderMappings.Add(entry.Key, "Weapon");
+                        break;
+                    case nameof(SpecialItemMode.Teleport):
+                        _gemItemHeaderMappings.Add(entry.Key, "Armour");
+                        break;
+                    case nameof(SpecialItemMode.ClearRing):
+                        _gemItemHeaderMappings.Add(entry.Key, "Helmet");
+                        break;
+                    case nameof(SpecialItemMode.Protection):
+                        _gemItemHeaderMappings.Add(entry.Key, "Necklace");
+                        break;
+                    case nameof(SpecialItemMode.Revival):
+                        _gemItemHeaderMappings.Add(entry.Key, "Bracelet");
+                        break;
+                    case nameof(SpecialItemMode.Muscle):
+                        _gemItemHeaderMappings.Add(entry.Key, "Ring");
+                        break;
+                    case nameof(SpecialItemMode.Flame):
+                        _gemItemHeaderMappings.Add(entry.Key, "Amulet");
+                        break;
+                    case nameof(SpecialItemMode.Healing):
+                        _gemItemHeaderMappings.Add(entry.Key, "Belt");
+                        break;
+                    case nameof(SpecialItemMode.Probe):
+                        _gemItemHeaderMappings.Add(entry.Key, "Boots");
+                        break;
+                    case nameof(SpecialItemMode.Skill):
+                        _gemItemHeaderMappings.Add(entry.Key, "Stone");
+                        break;
+                    case nameof(SpecialItemMode.NoDuraLoss):
+                        _gemItemHeaderMappings.Add(entry.Key, "Torch");
+                        break;
+                    case "Critical Damage":
+                        _gemItemHeaderMappings.Add(entry.Key, "Max Stats (All)");
+                        break;
+                    case "Critical":
+                        _gemItemHeaderMappings.Add(entry.Key, "Base Rate %");
+                        break;
+                    case "Reflect":
+                        _gemItemHeaderMappings.Add(entry.Key, "Success Drop");
+                        break;
+                    case "HP Drain %":
+                        _gemItemHeaderMappings.Add(entry.Key, "Max Gem Stat");
+                        break;
+                }
+            }
+        }
+
+        private void SwapGemContext(bool showGemInfo)
+        {
+            // are we already showing correct field names?
+            if ((showGemInfo && _isInGemContext) ||
+                (!showGemInfo && !_isInGemContext))
+            {
+                return;
+            }
+
+            foreach (var entry in _gemItemHeaderMappings)
+            {
+                var col = itemInfoGridView.Columns[entry.Key];
+
+                col.HeaderText = showGemInfo ?
+                                   _gemItemHeaderMappings[entry.Key] :
+                                   _defaultItemHeaderMappings[entry.Key];
+
+                col.DefaultCellStyle.BackColor = showGemInfo ?
+                                                    Color.Yellow :
+                                                    Color.Empty;
+            }
+
+            _isInGemContext = showGemInfo;
         }
     }
 }

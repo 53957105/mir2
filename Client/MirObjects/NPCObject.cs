@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Linq;
-using System.Text;
-using Client.MirControls;
+﻿using Client.MirControls;
 using Client.MirGraphics;
 using Client.MirScenes;
 using S = ServerPackets;
@@ -74,7 +69,7 @@ namespace Client.MirObjects
             Light = 10;
             BaseIndex = 0;
 
-            SetAction();
+            SetAction(true);
         }
 
         public void LoadLibrary()
@@ -231,7 +226,7 @@ namespace Client.MirObjects
             return ++EffectFrameIndex;
         }
 
-        public virtual void SetAction()
+        public virtual void SetAction(bool randomStartFrame = false)
         {
             if (ActionFeed.Count == 0)
             {
@@ -241,8 +236,19 @@ namespace Client.MirObjects
                     CurrentAction = MirAction.Standing;
 
                 Frames.TryGetValue(CurrentAction, out Frame);
-                FrameIndex = 0;
-                EffectFrameIndex = 0;
+
+                if (randomStartFrame)
+                {
+                    var frameIndex = new Random().Next(Frame.Count);
+
+                    FrameIndex = frameIndex;
+                    EffectFrameIndex = Math.Min(Frame.EffectCount, frameIndex);
+                }
+                else
+                {
+                    FrameIndex = 0;
+                    EffectFrameIndex = 0;
+                }
 
                 if (MapLocation != CurrentLocation)
                 {

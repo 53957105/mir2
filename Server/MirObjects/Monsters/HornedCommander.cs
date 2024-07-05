@@ -1,8 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
 using System.Drawing;
-using System.Linq;
-using Server.MirDatabase;
+﻿using Server.MirDatabase;
 using Server.MirEnvir;
 using S = ServerPackets;
 
@@ -62,7 +59,7 @@ namespace Server.MirObjects.Monsters
             return !_Immune && base.IsAttackTarget(attacker);
         }
 
-        public override bool IsAttackTarget(PlayerObject attacker)
+        public override bool IsAttackTarget(HumanObject attacker)
         {
             return !_Immune && base.IsAttackTarget(attacker);
         }

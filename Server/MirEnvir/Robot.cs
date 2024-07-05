@@ -1,14 +1,15 @@
 ﻿using Server.MirObjects;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
 
 namespace Server.MirEnvir
 {
     public class Robot
     {
+        protected static Envir Envir
+        {
+            get { return Envir.Main; }
+        }
+
         public int? Month;
         public int? Day;
         public int? Hour;
@@ -23,7 +24,7 @@ namespace Server.MirEnvir
 
         private static void SetNextCheck()
         {
-            var next = DateTime.Now;
+            var next = Envir.Now;
             next = next.AddSeconds(-next.Second);
             next = next.AddMinutes(1);
 
@@ -42,6 +43,11 @@ namespace Server.MirEnvir
             NextCheck = next;
         }
 
+        public static void Clear()
+        {
+            Robots.Clear();
+        }
+
         private bool IsMatch(DateTime date)
         {
             if (Month != null && date.Month != Month) return false;
@@ -55,12 +61,12 @@ namespace Server.MirEnvir
 
         public static void Process(NPCScript script)
         {
-            if (NextCheck > DateTime.Now)
+            if (NextCheck > Envir.Now)
             {
                 return;
             }
 
-            var matches = Robots.Where(x => x.IsMatch(DateTime.Now));
+            var matches = Robots.Where(x => x.IsMatch(Envir.Now));
 
             foreach (var match in matches)
             {

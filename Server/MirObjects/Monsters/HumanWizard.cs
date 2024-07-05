@@ -1,6 +1,5 @@
 ﻿using Server.MirDatabase;
 using S = ServerPackets;
-using System.Collections.Generic;
 
 namespace Server.MirObjects.Monsters
 {
@@ -139,7 +138,7 @@ namespace Server.MirObjects.Monsters
 
             Broadcast(new S.ObjectDied { ObjectID = ObjectID, Direction = Direction, Location = CurrentLocation, Type = (byte)(Master != null ? 1 : 0) });
 
-            if (EXPOwner != null && Master == null && EXPOwner.Race == ObjectType.Player) EXPOwner.WinExp(Experience);
+            if (EXPOwner != null && EXPOwner.Node != null && Master == null && EXPOwner.Race == ObjectType.Player) EXPOwner.WinExp(Experience);
 
             if (Respawn != null)
                 Respawn.Count--;
@@ -147,9 +146,13 @@ namespace Server.MirObjects.Monsters
             if (Master == null)
                 Drop();
 
+            Master = null;
+
             PoisonList.Clear();
             Envir.MonsterCount--;
-            CurrentMap.MonsterCount--;
+
+            if (CurrentMap != null)
+                CurrentMap.MonsterCount--;
         }
 
         public override Packet GetInfo()
@@ -158,13 +161,17 @@ namespace Server.MirObjects.Monsters
             short weapon = -1;
             short armour = 0;
             byte wing = 0;
-            if (Master != null && Master is PlayerObject) master = (PlayerObject)Master;
+
+            if (Master != null && Master is PlayerObject) 
+                master = (PlayerObject)Master;
+
             if (master != null)
             {
                 weapon = master.Looks_Weapon;
                 armour = master.Looks_Armour;
                 wing = master.Looks_Wings;
             }
+
             return new S.ObjectPlayer
             {
                 ObjectID = ObjectID,

@@ -1,17 +1,10 @@
-﻿using System;
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Diagnostics;
-using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Drawing.Text;
-using System.IO;
-using System.Linq;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security;
-using System.Threading;
-using System.Windows.Forms;
 using Client.MirControls;
 using Client.MirGraphics;
 using Client.MirNetwork;
@@ -31,8 +24,8 @@ namespace Client
         public static Point MPoint;
 
         public readonly static Stopwatch Timer = Stopwatch.StartNew();
-        public readonly static DateTime StartTime = DateTime.Now;
-        public static long Time, OldTime;
+        public readonly static DateTime StartTime = DateTime.UtcNow;
+        public static long Time;
         public static DateTime Now { get { return StartTime.AddMilliseconds(Time); } }
         public static readonly Random Random = new Random();
 
@@ -40,12 +33,16 @@ namespace Client
 
         private static long _fpsTime;
         private static int _fps;
+        private static long _cleanTime;
+        private static long _drawTime;
         public static int FPS;
+        public static int DPS;
+        public static int DPSCounter;
 
         public static long PingTime;
         public static long NextPing = 10000;
 
-        public static bool Shift, Alt, Ctrl, Tilde;
+        public static bool Shift, Alt, Ctrl, Tilde, SpellTargetLock;
         public static double BytesSent, BytesReceived;
 
         public static KeyBindSettings InputKeys = new KeyBindSettings();
@@ -69,7 +66,7 @@ namespace Client
 
 
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.Selectable, true);
-            FormBorderStyle = Settings.FullScreen ? FormBorderStyle.None : FormBorderStyle.FixedDialog;
+            FormBorderStyle = Settings.FullScreen || Settings.Borderless ? FormBorderStyle.None : FormBorderStyle.FixedDialog;
 
             Graphics = CreateGraphics();
             Graphics.SmoothingMode = SmoothingMode.AntiAlias;
@@ -90,6 +87,8 @@ namespace Client
                 LoadMouseCursors();
                 SetMouseCursor(MouseCursor.Default);
 
+                SlimDX.Configuration.EnableObjectTracking = true;
+
                 DXManager.Create();
                 SoundManager.Create();
                 CenterToScreen();
@@ -100,7 +99,6 @@ namespace Client
             }
         }
 
-
         private static void Application_Idle(object sender, EventArgs e)
         {
             try
@@ -108,8 +106,11 @@ namespace Client
                 while (AppStillIdle)
                 {
                     UpdateTime();
+                    UpdateFrameTime();
                     UpdateEnviroment();
-                    RenderEnvironment();
+
+                    if (IsDrawTime())
+                        RenderEnvironment();
                 }
 
             }
@@ -126,6 +127,7 @@ namespace Client
             Alt = false;
             Ctrl = false;
             Tilde = false;
+            SpellTargetLock = false;
         }
 
         public static void CMain_KeyDown(object sender, KeyEventArgs e)
@@ -133,6 +135,16 @@ namespace Client
             Shift = e.Shift;
             Alt = e.Alt;
             Ctrl = e.Control;
+
+            if (!String.IsNullOrEmpty(InputKeys.GetKey(KeybindOptions.TargetSpellLockOn)))
+            {
+                SpellTargetLock = e.KeyCode == (Keys)Enum.Parse(typeof(Keys), InputKeys.GetKey(KeybindOptions.TargetSpellLockOn), true);
+            }
+            else
+            {
+                SpellTargetLock = false;
+            }
+
 
             if (e.KeyCode == Keys.Oem8)
                 CMain.Tilde = true;
@@ -156,8 +168,8 @@ namespace Client
         }
         public static void CMain_MouseMove(object sender, MouseEventArgs e)
         {
-            if (Settings.FullScreen)
-                Cursor.Clip = new Rectangle(0, 0, Settings.ScreenWidth, Settings.ScreenHeight);
+            if (Settings.FullScreen || Settings.MouseClip)
+                Cursor.Clip = Program.Form.RectangleToScreen(Program.Form.ClientRectangle);
 
             MPoint = Program.Form.PointToClient(Cursor.Position);
 
@@ -176,6 +188,15 @@ namespace Client
             Shift = e.Shift;
             Alt = e.Alt;
             Ctrl = e.Control;
+
+            if (!String.IsNullOrEmpty(InputKeys.GetKey(KeybindOptions.TargetSpellLockOn)))
+            {
+                SpellTargetLock = e.KeyCode == (Keys)Enum.Parse(typeof(Keys), InputKeys.GetKey(KeybindOptions.TargetSpellLockOn), true);
+            }
+            else
+            {
+                SpellTargetLock = false;
+            }
 
             if (e.KeyCode == Keys.Oem8)
                 CMain.Tilde = false;
@@ -234,7 +255,7 @@ namespace Client
         public static void CMain_MouseUp(object sender, MouseEventArgs e)
         {
             MapControl.MapButtons &= ~e.Button;
-            if (!MapControl.MapButtons.HasFlag(MouseButtons.Right))
+            if (e.Button != MouseButtons.Right || !Settings.NewMove)
                 GameScene.CanRun = false;
 
             try
@@ -303,18 +324,42 @@ namespace Client
         {
             Time = Timer.ElapsedMilliseconds;
         }
-        private static void UpdateEnviroment()
-        {  
 
+        private static void UpdateFrameTime()
+        {
             if (Time >= _fpsTime)
             {
                 _fpsTime = Time + 1000;
                 FPS = _fps;
                 _fps = 0;
-                DXManager.Clean(); // Clean once a second.
+
+                DPS = DPSCounter;
+                DPSCounter = 0;
             }
             else
                 _fps++;
+        }
+
+        private static bool IsDrawTime()
+        {
+            const int TargetUpdates = 1000 / 60; // 60 frames per second
+
+            if (Time >= _drawTime)
+            {
+                _drawTime = Time + TargetUpdates;
+                return true;
+            }
+            return false;
+        }
+
+        private static void UpdateEnviroment()
+        {
+            if (Time >= _cleanTime)
+            {
+                _cleanTime = Time + 1000;
+
+                DXManager.Clean(); // Clean once a second.
+            }
 
             Network.Process();
 
@@ -361,6 +406,7 @@ namespace Client
             catch (Direct3D9Exception ex)
             {
                 DXManager.DeviceLost = true;
+                SaveError(ex.ToString());
             }
             catch (Exception ex)
             {
@@ -377,6 +423,10 @@ namespace Client
             if (MirControl.MouseControl != null)
             {
                 text = string.Format("FPS: {0}", FPS);
+
+                text += string.Format(", DPS: {0}", DPS);
+
+                text += string.Format(", Time: {0:HH:mm:ss UTC}", Now);
 
                 if (MirControl.MouseControl is MapControl)
                     text += string.Format(", Co Ords: {0}", MapControl.MapLocation);
@@ -465,10 +515,10 @@ namespace Client
             {
                 HintBaseLabel = new MirControl
                 {
-                    BackColour = Color.FromArgb(128, 128, 50),
+                    BackColour = Color.FromArgb(255, 0, 0, 0),
                     Border = true,
                     DrawControlTexture = true,
-                    BorderColour = Color.Yellow,
+                    BorderColour = Color.FromArgb(255, 144, 144, 0),
                     ForeColour = Color.Yellow,
                     Parent = MirScene.ActiveScene,
                     NotControl = true,
@@ -483,7 +533,7 @@ namespace Client
                 {
                     AutoSize = true,
                     BackColour = Color.Transparent,
-                    ForeColour = Color.White,
+                    ForeColour = Color.Yellow,
                     Parent = HintBaseLabel,
                 };
 
@@ -519,7 +569,7 @@ namespace Client
         {
             Settings.FullScreen = !Settings.FullScreen;
 
-            Program.Form.FormBorderStyle = Settings.FullScreen ? FormBorderStyle.None : FormBorderStyle.FixedDialog;
+            Program.Form.FormBorderStyle = Settings.FullScreen || Settings.Borderless ? FormBorderStyle.None : FormBorderStyle.FixedDialog;
 
             DXManager.Parameters.Windowed = !Settings.FullScreen;
 
@@ -602,9 +652,9 @@ namespace Client
             DXManager.Device.Present();
             DXManager.ResetDevice();
 
-            Program.Form.CenterToScreen();
+            if (!Settings.FullScreen)
+                Program.Form.CenterToScreen();
         }
-            
 
         #region ScreenCapture
 
@@ -644,10 +694,17 @@ namespace Client
 
         private void CMain_FormClosing(object sender, FormClosingEventArgs e)
         {
-            if (CMain.Time < GameScene.LogTime && !Settings.UseTestConfig)
+            if (CMain.Time < GameScene.LogTime && !Settings.UseTestConfig && !GameScene.Observing)
             {
                 GameScene.Scene.ChatDialog.ReceiveChat(string.Format(GameLanguage.CannotLeaveGame, (GameScene.LogTime - CMain.Time) / 1000), ChatType.System);
                 e.Cancel = true;
+            }
+            else
+            {
+                Settings.Save();
+
+                DXManager.Dispose();
+                SoundManager.Dispose();
             }
         }
 
@@ -725,8 +782,8 @@ namespace Client
             if (hCurs == IntPtr.Zero) throw new Win32Exception();
             var curs = new Cursor(hCurs);
             // Note: force the cursor to own the handle so it gets released properly
-            var fi = typeof(Cursor).GetField("ownHandle", BindingFlags.NonPublic | BindingFlags.Instance);
-            fi.SetValue(curs, true);
+            //var fi = typeof(Cursor).GetField("ownHandle", BindingFlags.NonPublic | BindingFlags.Instance);
+            //fi.SetValue(curs, true);
             return curs;
         }
 

@@ -1,10 +1,4 @@
-﻿using System.Drawing;
-using Server.MirObjects;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
+﻿using Server.MirObjects;
 using System.Text.RegularExpressions;
 using Server.MirEnvir;
 
@@ -58,7 +52,8 @@ namespace Server.MirDatabase
             FlagMessage = string.Empty;
 
         public List<string> Description = new List<string>();
-        public List<string> TaskDescription = new List<string>(); 
+        public List<string> TaskDescription = new List<string>();
+        public List<string> ReturnDescription = new List<string>();
         public List<string> CompletionDescription = new List<string>(); 
 
         public int RequiredMinLevel, RequiredMaxLevel, RequiredQuest;
@@ -66,11 +61,15 @@ namespace Server.MirDatabase
 
         public QuestType Type;
 
+        public int TimeLimitInSeconds = 0;
+
         public List<QuestItemTask> CarryItems = new List<QuestItemTask>(); 
 
         public List<QuestKillTask> KillTasks = new List<QuestKillTask>();
         public List<QuestItemTask> ItemTasks = new List<QuestItemTask>();
         public List<QuestFlagTask> FlagTasks = new List<QuestFlagTask>();
+        //TODO: ZoneTasks
+        //TODO: EscortTasks
 
         public uint GoldReward;
         public uint ExpReward;
@@ -102,6 +101,11 @@ namespace Server.MirDatabase
             ItemMessage = reader.ReadString();
             FlagMessage = reader.ReadString();
 
+            if (Envir.LoadVersion > 90)
+            {
+                TimeLimitInSeconds = reader.ReadInt32();
+            }
+
             LoadInfo();
         }
 
@@ -120,6 +124,7 @@ namespace Server.MirDatabase
             writer.Write(KillMessage);
             writer.Write(ItemMessage);
             writer.Write(FlagMessage);
+            writer.Write(TimeLimitInSeconds);
         }
 
         public void LoadInfo(bool clear = false)
@@ -158,6 +163,7 @@ namespace Server.MirDatabase
             const string
                 descriptionCollectKey = "[@DESCRIPTION]",
                 descriptionTaskKey = "[@TASKDESCRIPTION]",
+                descriptionReturnKey = "[@RETURNDESCRIPTION]",
                 descriptionCompletionKey = "[@COMPLETION]",
                 carryItemsKey = "[@CARRYITEMS]",
                 killTasksKey = "[@KILLTASKS]",
@@ -173,7 +179,7 @@ namespace Server.MirDatabase
             { 
                 descriptionCollectKey, descriptionTaskKey, descriptionCompletionKey,
                 carryItemsKey, killTasksKey, itemTasksKey, flagTasksKey,
-                fixedRewardsKey, selectRewardsKey, expRewardKey, goldRewardKey, creditRewardKey
+                fixedRewardsKey, selectRewardsKey, expRewardKey, goldRewardKey, creditRewardKey, descriptionReturnKey
             };
 
             int currentHeader = 0;
@@ -200,6 +206,9 @@ namespace Server.MirDatabase
                                 break;
                             case descriptionTaskKey:
                                 TaskDescription.Add(innerLine);
+                                break;
+                            case descriptionReturnKey:
+                                ReturnDescription.Add(innerLine);
                                 break;
                             case descriptionCompletionKey:
                                 CompletionDescription.Add(innerLine);
@@ -384,12 +393,14 @@ namespace Server.MirDatabase
                 Group = Group,
                 Description = Description,
                 TaskDescription = TaskDescription,
+                ReturnDescription = ReturnDescription,
                 CompletionDescription = CompletionDescription,
                 MinLevelNeeded = RequiredMinLevel,
                 MaxLevelNeeded = RequiredMaxLevel,
                 ClassNeeded = RequiredClass,
                 QuestNeeded = RequiredQuest,
                 Type = Type,
+                TimeLimitInSeconds = TimeLimitInSeconds,
                 RewardGold = GoldReward,
                 RewardExp = ExpReward,
                 RewardCredit = CreditReward,

@@ -1,9 +1,6 @@
-﻿using System;
-using System.Drawing;
-using System.Drawing.Drawing2D;
+﻿using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Drawing.Text;
-using System.Windows.Forms;
 using Client.MirGraphics;
 using SlimDX;
 using SlimDX.Direct3D9;
@@ -195,8 +192,8 @@ namespace Client.MirControls
             if (Size.Width == 0 || Size.Height == 0)
                 return;
 
-            if (ControlTexture != null && !ControlTexture.Disposed && TextureSize != Size)
-                ControlTexture.Dispose();
+            if (TextureSize != Size)
+                DisposeTexture();
 
             if (ControlTexture == null || ControlTexture.Disposed)
             {
@@ -256,7 +253,11 @@ namespace Client.MirControls
             _drawFormat = 0;
 
             FontChanged = null;
-            _font = null;
+            if (_font != null)
+            {
+                _font.Dispose();
+                _font = null;
+            }
 
             OutLineChanged = null;
             _outLine = false;

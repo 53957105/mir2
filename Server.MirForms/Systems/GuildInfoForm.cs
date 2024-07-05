@@ -1,7 +1,4 @@
-﻿using System;
-using System.Drawing;
-using System.Windows.Forms;
-using Server.MirEnvir;
+﻿using Server.MirEnvir;
 using Server.MirObjects;
 
 namespace Server
@@ -45,6 +42,8 @@ namespace Server
             GuildExpratetextBox.Text = Settings.Guild_ExpRate.ToString();
             WarLengthTextBox.Text = Settings.Guild_WarTime.ToString();
             WarCostTextBox.Text = Settings.Guild_WarCost.ToString();
+            NewbieGuildExptextBox.Text = Settings.NewbieGuildExpBuff.ToString();
+            NewbieGuildBuffEnabledcheckBox.Checked = Settings.NewbieGuildBuffEnabled;
 
             if ((GuildLevelListcomboBox.SelectedItem == null) || (GuildLevelListcomboBox.SelectedIndex >= Settings.Guild_ExperienceList.Count) || (GuildLevelListcomboBox.SelectedIndex >= Settings.Guild_MembercapList.Count))
             {
@@ -104,7 +103,7 @@ namespace Server
                 SelectedBuff  = (GuildBuffInfo)BuffList.SelectedItem;
                 BuffPanel.Enabled = true;
                 BufflblIndex.Text = $"Index:  {SelectedBuff.Id}";
-                BufftxtName.Text = SelectedBuff.name;
+                BufftxtName.Text = SelectedBuff.Name;
                 BuffTxtLevelReq.Text = SelectedBuff.LevelRequirement.ToString();
                 BufftxtPointsReq.Text = SelectedBuff.PointsRequirement.ToString();
                 BufftxtTimeLimit.Text = SelectedBuff.TimeLimit.ToString();
@@ -129,6 +128,28 @@ namespace Server
                 BufftxtDropRate.Text = SelectedBuff.Stats[Stat.ItemDropRatePercent].ToString();
                 BufftxtGoldRate.Text = SelectedBuff.Stats[Stat.GoldDropRatePercent].ToString();
             }
+        }
+
+        private void NewbieGuildExptextBox_TextChanged(object sender, EventArgs e)
+        {
+            if (ActiveControl != sender) return;
+
+            if (!int.TryParse(ActiveControl.Text, out int temp))
+            {
+                ActiveControl.BackColor = Color.Red;
+                return;
+            }
+            ActiveControl.BackColor = SystemColors.Window;
+            Settings.NewbieGuildExpBuff = temp;
+            GuildsChanged = true;
+        }
+
+        private void NewbieGuildBuffEnabledcheckBox_CheckedChanged(object sender, EventArgs e)
+        {
+            if (ActiveControl != sender) return;
+
+            Settings.NewbieGuildBuffEnabled = NewbieGuildBuffEnabledcheckBox.Checked;
+            GuildsChanged = true;
         }
 
         private void GuildMinOwnerLeveltextBox_TextChanged(object sender, EventArgs e)
@@ -374,7 +395,7 @@ namespace Server
             GuildBuffInfo NewBuff = new GuildBuffInfo
             {
                 Id = ++Index,
-                name = "Buff " + Index.ToString()
+                Name = "Buff " + Index.ToString()
             };
 
             Settings.Guild_BuffList.Add(NewBuff);
@@ -403,7 +424,7 @@ namespace Server
                 return;
             }
             ActiveControl.BackColor = SystemColors.Window;
-            SelectedBuff.name = ActiveControl.Text;
+            SelectedBuff.Name = ActiveControl.Text;
             GuildsChanged = true;
         }
 

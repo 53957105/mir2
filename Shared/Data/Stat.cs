@@ -1,11 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Reflection;
-using System.Text;
-
-public sealed class Stats : IEquatable<Stats>
+﻿public sealed class Stats : IEquatable<Stats>
 {
     public SortedDictionary<Stat, int> Values { get; set; } = new SortedDictionary<Stat, int>();
     public int Count => Values.Sum(pair => Math.Abs(pair.Value));
@@ -40,7 +33,7 @@ public sealed class Stats : IEquatable<Stats>
             this[pair.Key] += pair.Value;
     }
 
-    public Stats(BinaryReader reader)
+    public Stats(BinaryReader reader, int version = int.MaxValue, int customVersion = int.MaxValue)
     {
         int count = reader.ReadInt32();
 
@@ -153,6 +146,7 @@ public enum Stat : byte
     EnergyShieldHPGain = 126,
     ManaPenaltyPercent = 127,
     TeleportManaPenaltyPercent = 128,
+    Hero = 129,
 
     Unknown = 255
 }

@@ -1,13 +1,7 @@
-﻿using System;
-using System.Drawing;
-using System.Linq;
-using System.Windows.Forms;
-using Client.MirGraphics;
+﻿using Client.MirGraphics;
 using SlimDX;
 using SlimDX.Direct3D9;
-using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
-using System.Drawing.Text;
 
 namespace Client.MirControls
 {
@@ -297,11 +291,11 @@ namespace Client.MirControls
         {
             if (!Settings.FullScreen) return;
 
-            if (Size.Width == 0 || Size.Height == 0)
+            if (Size.IsEmpty)
                 return;
 
-            if (ControlTexture != null && !ControlTexture.Disposed && TextureSize != Size)
-                ControlTexture.Dispose();
+            if (TextureSize != Size)
+                DisposeTexture();
 
             if (ControlTexture == null || ControlTexture.Disposed)
             {

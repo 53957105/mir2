@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using Server.MirDatabase;
+﻿using Server.MirDatabase;
 using S = ServerPackets;
 
 namespace Server.MirObjects.Monsters
@@ -96,7 +94,7 @@ namespace Server.MirObjects.Monsters
             return Sleeping ? 0 : base.Attacked(attacker, damage, type);
         }
 
-        public override int Attacked(PlayerObject attacker, int damage, DefenceType type = DefenceType.ACAgility, bool damageWeapon = true)
+        public override int Attacked(HumanObject attacker, int damage, DefenceType type = DefenceType.ACAgility, bool damageWeapon = true)
         {
             return Sleeping ? 0 : base.Attacked(attacker, damage, type, damageWeapon);
         }

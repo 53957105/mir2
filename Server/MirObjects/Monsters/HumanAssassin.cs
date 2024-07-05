@@ -1,10 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
 using System.Drawing;
-using System.Linq;
-using Server.MirDatabase;
+﻿using Server.MirDatabase;
 using Server.MirEnvir;
-using Server.MirObjects.Monsters;
 using S = ServerPackets;
 
 namespace Server.MirObjects.Monsters
@@ -25,13 +21,16 @@ namespace Server.MirObjects.Monsters
 
         protected override void RefreshBase()
         {
-            Stats.Clear();
-            Stats.Add(Master.Stats);
+            if (Master != null)
+            {
+                Stats.Clear();
+                Stats.Add(Master.Stats);
 
-            Stats[Stat.HP] = 1500;
+                Stats[Stat.HP] = 1500;
 
-            MoveSpeed = 100;
-            AttackSpeed = Master.AttackSpeed;
+                MoveSpeed = 100;
+                AttackSpeed = Master.AttackSpeed;
+            }
         }
 
         public override void RefreshAll()
@@ -280,14 +279,18 @@ namespace Server.MirObjects.Monsters
 
             Broadcast(new S.ObjectDied { ObjectID = ObjectID, Direction = Direction, Location = CurrentLocation, Type = (byte)2 });
 
-            if (EXPOwner != null && Master == null && EXPOwner.Race == ObjectType.Player) EXPOwner.WinExp(Experience);
+            if (EXPOwner != null && EXPOwner.Node != null && Master == null && EXPOwner.Race == ObjectType.Player) EXPOwner.WinExp(Experience);
 
             if (Respawn != null)
                 Respawn.Count--;
 
+            Master = null;
+
             PoisonList.Clear();
             Envir.MonsterCount--;
-            CurrentMap.MonsterCount--;
+
+            if (CurrentMap != null)
+                CurrentMap.MonsterCount--;
         }
 
         private void ExplosionDie()
@@ -331,13 +334,16 @@ namespace Server.MirObjects.Monsters
             short weapon = -1;
             short armour = 0;
             byte wing = 0;
-            if (Master != null && Master is PlayerObject) master = (PlayerObject)Master;
+            if (Master != null && Master is PlayerObject) 
+                master = (PlayerObject)Master;
+
             if (master != null)
             {
                 weapon = master.Looks_Weapon;
                 armour = master.Looks_Armour;
                 wing = master.Looks_Wings;
             }
+
             return new S.ObjectPlayer
             {
                 ObjectID = ObjectID,

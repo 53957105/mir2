@@ -1,6 +1,5 @@
-﻿using System.Collections.Generic;
-using Server.MirDatabase;
 using System.Drawing;
+﻿using Server.MirDatabase;
 using S = ServerPackets;
 
 namespace Server.MirObjects.Monsters
@@ -96,7 +95,7 @@ namespace Server.MirObjects.Monsters
         {
             return Visible && base.IsAttackTarget(attacker);
         }
-        public override bool IsAttackTarget(PlayerObject attacker)
+        public override bool IsAttackTarget(HumanObject attacker)
         {
             return Visible && base.IsAttackTarget(attacker);
         }

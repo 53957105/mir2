@@ -1,15 +1,14 @@
-﻿using System.IO;
-using System;
-using Client.MirSounds;
-using System.Windows.Forms;
+﻿using Client.MirSounds;
 
 namespace Client
 {
     class Settings
     {
         public const long CleanDelay = 600000;
+
         public static int ScreenWidth = 1024, ScreenHeight = 768;
         private static InIReader Reader = new InIReader(@".\Mir2Config.ini");
+        private static InIReader QuestTrackingReader = new InIReader(Path.Combine(UserDataPath, @".\QuestTracking.ini"));
 
         private static bool _useTestConfig;
         public static bool UseTestConfig
@@ -36,6 +35,7 @@ namespace Client
                             MonsterPath = @".\Data\Monster\",
                             GatePath = @".\Data\Gate\",
                             FlagPath = @".\Data\Flag\",
+                            SiegePath = @".\Data\Siege\",
                             NPCPath = @".\Data\NPC\",
                             CArmourPath = @".\Data\CArmour\",
                             CWeaponPath = @".\Data\CWeapon\",
@@ -57,7 +57,9 @@ namespace Client
                             TransformMountsPath = @".\Data\TransformRide2\",
                             TransformEffectPath = @".\Data\TransformEffect\",
                             TransformWeaponEffectPath = @".\Data\TransformWeaponEffect\",
-                            MouseCursorPath = @".\Data\Cursors\";
+                            MouseCursorPath = @".\Data\Cursors\",
+                            ResourcePath = @".\DirectX\",
+                            UserDataPath = @".\Data\UserData\";
 
         //Logs
         public static bool LogErrors = true;
@@ -65,8 +67,8 @@ namespace Client
         public static int RemainingErrorLogs = 100;
 
         //Graphics
-        public static bool FullScreen = true, Borderless = true, TopMost = true;
-        public static string FontName = "Tahoma"; //"MS Sans Serif"
+        public static bool FullScreen = true, Borderless = true, TopMost = true, MouseClip = false;
+        public static string FontName = "Arial"; //"MS Sans Serif"
         public static float FontSize = 8F;
         public static bool UseMouseCursors = true;
 
@@ -84,19 +86,27 @@ namespace Client
         //Sound
         public static int SoundOverLap = 3;
         private static byte _volume = 100;
+        public static int SoundCleanMinutes = 5;
+
         public static byte Volume
         {
             get { return _volume; }
             set
             {
-                if (_volume == value) return;
+                switch (value)
+                {
+                    case > 100:
+                        _volume = (byte)100;
+                        break;
+                    case <= 0:
+                        _volume = (byte)0;
+                        break;
+                    default:
+                        _volume = value;
+                        break;
+                }
 
-                _volume = (byte) (value > 100 ? 100 : value);
-
-                if (_volume == 0)
-                    SoundManager.Vol = -10000;
-                else 
-                    SoundManager.Vol = (int)(-3000 + (3000 * (_volume / 100M)));
+                SoundManager.Vol = Convert.ToInt32(_volume);
             }
         }
 
@@ -106,14 +116,20 @@ namespace Client
             get { return _musicVolume; }
             set
             {
-                if (_musicVolume == value) return;
+                switch(value)
+                {
+                    case > 100:
+                        _musicVolume = (byte)100;
+                        break;
+                    case <= 0:
+                        _musicVolume = (byte)0;
+                        break;
+                    default:
+                        _musicVolume = value;
+                        break;
+                }
 
-                _musicVolume = (byte)(value > 100 ? 100 : value);
-
-                if (_musicVolume == 0)
-                    SoundManager.MusicVol = -10000;
-                else
-                    SoundManager.MusicVol = (int)(-3000 + (3000 * (_musicVolume / 100M)));
+                SoundManager.MusicVol = Convert.ToInt32(_musicVolume);
             }
         }
 
@@ -137,7 +153,9 @@ namespace Client
             TargetDead = false,
             HighlightTarget = true,
             ExpandedBuffWindow = true,
-            DisplayBodyName = false;
+            ExpandedHeroBuffWindow = true,
+            DisplayBodyName = false,
+            NewMove = false;
 
         public static int[,] SkillbarLocation = new int[2, 2] { { 0, 0 }, { 216, 0 }  };
 
@@ -174,9 +192,10 @@ namespace Client
         public static string P_Login = string.Empty;
         public static string P_Password = string.Empty;
         public static string P_ServerName = string.Empty;
-        public static string P_BrowserAddress = "https://launcher.mironline.co.uk/web/";
+        public static string P_BrowserAddress = "https://www.lomcn.org/mir2-patchsite/";
         public static string P_Client = Application.StartupPath + "\\";
         public static bool P_AutoStart = false;
+        public static int P_Concurrency = 1;
 
         public static void Load()
         {
@@ -189,6 +208,7 @@ namespace Client
             //Graphics
             FullScreen = Reader.ReadBoolean("Graphics", "FullScreen", FullScreen);
             Borderless = Reader.ReadBoolean("Graphics", "Borderless", Borderless);
+            MouseClip = Reader.ReadBoolean("Graphics", "MouseClip", MouseClip);
             TopMost = Reader.ReadBoolean("Graphics", "AlwaysOnTop", TopMost);
             FPSCap = Reader.ReadBoolean("Graphics", "FPSCap", FPSCap);
             Resolution = Reader.ReadInt32("Graphics", "Resolution", Resolution);
@@ -211,6 +231,10 @@ namespace Client
             Volume = Reader.ReadByte("Sound", "Volume", Volume);
             SoundOverLap = Reader.ReadInt32("Sound", "SoundOverLap", SoundOverLap);
             MusicVolume = Reader.ReadByte("Sound", "Music", MusicVolume);
+            var n = Reader.ReadInt32("Sound", "CleanMinutes", SoundCleanMinutes);
+            if (n < 1 || n > 60 * 3) n = SoundCleanMinutes;
+            SoundCleanMinutes = n;
+
 
             //Game
             AccountID = Reader.ReadString("Game", "AccountID", AccountID);
@@ -231,8 +255,10 @@ namespace Client
             TargetDead = Reader.ReadBoolean("Game", "TargetDead", TargetDead);
             HighlightTarget = Reader.ReadBoolean("Game", "HighlightTarget", HighlightTarget);
             ExpandedBuffWindow = Reader.ReadBoolean("Game", "ExpandedBuffWindow", ExpandedBuffWindow);
+            ExpandedHeroBuffWindow = Reader.ReadBoolean("Game", "ExpandedHeroBuffWindow", ExpandedHeroBuffWindow);
             DuraView = Reader.ReadBoolean("Game", "DuraWindow", DuraView);
             DisplayBodyName = Reader.ReadBoolean("Game", "DisplayBodyName", DisplayBodyName);
+            NewMove = Reader.ReadBoolean("Game", "NewMove", NewMove);
 
             for (int i = 0; i < SkillbarLocation.Length / 2; i++)
             {
@@ -269,6 +295,8 @@ namespace Client
             P_AutoStart = Reader.ReadBoolean("Launcher", "AutoStart", P_AutoStart);
             P_ServerName = Reader.ReadString("Launcher", "ServerName", P_ServerName);
             P_BrowserAddress = Reader.ReadString("Launcher", "Browser", P_BrowserAddress);
+            P_Concurrency = Reader.ReadInt32("Launcher", "ConcurrentDownloads", P_Concurrency);
+            
 
             if (!P_Host.EndsWith("/")) P_Host += "/";
             if (P_Host.StartsWith("www.", StringComparison.OrdinalIgnoreCase)) P_Host = P_Host.Insert(0, "http://");
@@ -279,6 +307,9 @@ namespace Client
             {
                 P_Host = "http://mirfiles.com/mir2/cmir/patch/";
             }
+
+            if (P_Concurrency < 1) P_Concurrency = 1;
+            if (P_Concurrency > 100) P_Concurrency = 100;
         }
 
         public static void Save()
@@ -286,6 +317,7 @@ namespace Client
             //Graphics
             Reader.Write("Graphics", "FullScreen", FullScreen);
             Reader.Write("Graphics", "Borderless", Borderless);
+            Reader.Write("Graphics", "MouseClip", MouseClip);
             Reader.Write("Graphics", "AlwaysOnTop", TopMost);
             Reader.Write("Graphics", "FPSCap", FPSCap);
             Reader.Write("Graphics", "Resolution", Resolution);
@@ -294,7 +326,9 @@ namespace Client
 
             //Sound
             Reader.Write("Sound", "Volume", Volume);
+            Reader.Write("Sound", "SoundOverLap", SoundOverLap);
             Reader.Write("Sound", "Music", MusicVolume);
+            Reader.Write("Sound", "CleanMinutes", SoundCleanMinutes);
 
             //Game
             Reader.Write("Game", "AccountID", AccountID);
@@ -314,8 +348,10 @@ namespace Client
             Reader.Write("Game", "TargetDead", TargetDead);
             Reader.Write("Game", "HighlightTarget", HighlightTarget);
             Reader.Write("Game", "ExpandedBuffWindow", ExpandedBuffWindow);
+            Reader.Write("Game", "ExpandedHeroBuffWindow", ExpandedBuffWindow);
             Reader.Write("Game", "DuraWindow", DuraView);
             Reader.Write("Game", "DisplayBodyName", DisplayBodyName);
+            Reader.Write("Game", "NewMove", NewMove);
 
             for (int i = 0; i < SkillbarLocation.Length / 2; i++)
             {
@@ -353,28 +389,26 @@ namespace Client
             Reader.Write("Launcher", "ServerName", P_ServerName);
             Reader.Write("Launcher", "Browser", P_BrowserAddress);
             Reader.Write("Launcher", "AutoStart", P_AutoStart);
+            Reader.Write("Launcher", "ConcurrentDownloads", P_Concurrency);
         }
 
-        public static void LoadTrackedQuests(string Charname)
+        public static void LoadTrackedQuests(string charName)
         {
             //Quests
             for (int i = 0; i < TrackedQuests.Length; i++)
             {
-                TrackedQuests[i] = Reader.ReadInt32("Q-" + Charname, "Quest-" + i.ToString(), -1);
+                TrackedQuests[i] = QuestTrackingReader.ReadInt32(charName, "Quest-" + i.ToString(), -1);
             }
         }
 
-        public static void SaveTrackedQuests(string Charname)
+        public static void SaveTrackedQuests(string charName)
         {
             //Quests
             for (int i = 0; i < TrackedQuests.Length; i++)
             {
-                Reader.Write("Q-" + Charname, "Quest-" + i.ToString(), TrackedQuests[i]);
+                QuestTrackingReader.Write(charName, "Quest-" + i.ToString(), TrackedQuests[i]);
             }
         }
-
-
-      
     }
 
     

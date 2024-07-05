@@ -1,8 +1,4 @@
-﻿using System;
-using System.Drawing;
-using System.Windows.Forms;
-using Client.MirGraphics;
-using Client.MirScenes;
+﻿using Client.MirGraphics;
 
 namespace Client.MirControls
 {
@@ -159,11 +155,6 @@ namespace Client.MirControls
                 TextBox T = Program.Form.Controls[i] as TextBox;
                 if (T != null && T.Tag != null && T.Tag != null)
                     ((MirTextBox)T.Tag).DialogChanged();
-            }
-
-            if (MirScene.ActiveScene is GameScene)
-            {
-                ((GameScene)Parent).BigMapDialog.Hide();
             }
         }
 

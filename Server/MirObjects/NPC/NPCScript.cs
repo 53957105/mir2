@@ -1,13 +1,6 @@
+using System.Drawing;
 ﻿using Server.MirDatabase;
 using Server.MirEnvir;
-using Server.MirObjects;
-using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Globalization;
-using System.IO;
-using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
 using S = ServerPackets;
 
@@ -45,7 +38,7 @@ namespace Server.MirObjects
         public readonly int ScriptID;
         public readonly uint LoadedObjectID;
         public readonly NPCScriptType Type;
-        protected readonly string FileName;
+        public readonly string FileName;
 
         public const string
             MainKey = "[@MAIN]",
@@ -74,6 +67,10 @@ namespace Server.MirObjects
             ResetKey = "[@RESET]",
             PearlBuyKey = "[@PEARLBUY]",
             BuyUsedKey = "[@BUYUSED]",
+            BuyNewKey = "[@BUYNEW]",
+            BuySellNewKey = "[@BUYSELLNEW]",
+            HeroCreateKey = "[@CREATEHERO]",
+            HeroManageKey = "[@MANAGEHERO]",
 
             TradeKey = "[TRADE]",
             RecipeKey = "[RECIPE]",
@@ -124,13 +121,13 @@ namespace Server.MirObjects
                 return callingNPC.Info.Rate / 100F;
             }
 
-            if (player.MyGuild != null && player.MyGuild.Guildindex == callingNPC.Conq.Owner)
+            if (player.MyGuild != null && player.MyGuild.Guildindex == callingNPC.Conq.GuildInfo.Owner)
             {
                 return callingNPC.Info.Rate / 100F;
             }
             else
             {
-                return (((callingNPC.Info.Rate / 100F) * callingNPC.Conq.npcRate) + callingNPC.Info.Rate) / 100F;
+                return (((callingNPC.Info.Rate / 100F) * callingNPC.Conq.GuildInfo.NPCRate) + callingNPC.Info.Rate) / 100F;
             }
         }
 
@@ -570,6 +567,7 @@ namespace Server.MirObjects
                     while (match.Success)
                     {
                         string argu = match.Groups[1].Captures[0].Value;
+                        argu = argu.Split('/')[0];
 
                         currentButtons.Add(string.Format("[{0}]", argu));
                         match = match.NextMatch();
@@ -943,9 +941,23 @@ namespace Server.MirObjects
                         sentGoods.AddRange(callingNPC.UsedGoods);
                     }
 
-                    player.Enqueue(new S.NPCGoods { List = sentGoods, Rate = PriceRate(player), Type = PanelType.Buy, HideAddedStats = Settings.GoodsHideAddedStats });
+                    player.SendNPCGoods(new S.NPCGoods { List = sentGoods, Rate = PriceRate(player), Type = PanelType.Buy, HideAddedStats = Settings.GoodsHideAddedStats });
 
                     if (key == BuySellKey)
+                    {
+                        player.Enqueue(new S.NPCSell());
+                    }
+                    break;
+                case BuyNewKey:
+                case BuySellNewKey:
+                    sentGoods = new List<UserItem>(Goods);
+
+                    for (int i = 0; i < Goods.Count; i++)
+                        player.CheckItem(Goods[i]);
+
+                    player.SendNPCGoods(new S.NPCGoods { List = sentGoods, Rate = PriceRate(player), Type = PanelType.Buy, HideAddedStats = Settings.GoodsHideAddedStats });
+
+                    if (key == BuySellNewKey)
                     {
                         player.Enqueue(new S.NPCSell());
                     }
@@ -963,7 +975,7 @@ namespace Server.MirObjects
                     for (int i = 0; i < CraftGoods.Count; i++)
                         player.CheckItemInfo(CraftGoods[i].Item.Info);
 
-                    player.Enqueue(new S.NPCGoods { List = (from x in CraftGoods where x.CanCraft(player) select x.Item).ToList(), Rate = PriceRate(player), Type = PanelType.Craft });
+                    player.SendNPCGoods(new S.NPCGoods { List = (from x in CraftGoods where x.CanCraft(player) select x.Item).ToList(), Rate = PriceRate(player), Type = PanelType.Craft });
                     break;
                 case RefineKey:
                     if (player.Info.CurrentRefine != null)
@@ -1003,7 +1015,7 @@ namespace Server.MirObjects
                                     player.CheckItem(callingNPC.BuyBack[player.Name][i]);
                                 }
 
-                                player.Enqueue(new S.NPCGoods { List = callingNPC.BuyBack[player.Name], Rate = PriceRate(player), Type = PanelType.Buy });
+                                player.SendNPCGoods(new S.NPCGoods { List = callingNPC.BuyBack[player.Name], Rate = PriceRate(player), Type = PanelType.Buy });
                             }
                         }
                     }
@@ -1019,7 +1031,7 @@ namespace Server.MirObjects
                                 for (int i = 0; i < callingNPC.UsedGoods.Count; i++)
                                     player.CheckItem(callingNPC.UsedGoods[i]);
 
-                                player.Enqueue(new S.NPCGoods { List = callingNPC.UsedGoods, Rate = PriceRate(player), Type = PanelType.BuySub, HideAddedStats = Settings.GoodsHideAddedStats });
+                                player.SendNPCGoods(new S.NPCGoods { List = callingNPC.UsedGoods, Rate = PriceRate(player), Type = PanelType.BuySub, HideAddedStats = Settings.GoodsHideAddedStats });
                             }
                         }
                     }
@@ -1097,6 +1109,21 @@ namespace Server.MirObjects
                         player.CheckItem(Goods[i]);
 
                     player.Enqueue(new S.NPCPearlGoods { List = Goods, Rate = PriceRate(player), Type = PanelType.Buy });
+                    break;
+                case HeroCreateKey:
+                    if (player.Info.Level < Settings.Hero_RequiredLevel)
+                    {
+                        player.ReceiveChat(String.Format("You have to be at least level {0} to create a hero.", Settings.Hero_RequiredLevel), ChatType.System);
+                        break;
+                    }
+                    player.CanCreateHero = true;
+                    player.Enqueue(new S.HeroCreateRequest()
+                    {
+                        CanCreateClass = Settings.Hero_CanCreateClass
+                    });
+                    break;
+                case HeroManageKey:
+                    player.ManageHeroes();
                     break;
             }
         }
@@ -1176,9 +1203,10 @@ namespace Server.MirObjects
 
                 if (callingNPC != null && callingNPC.Conq != null)
                 {
-                    callingNPC.Conq.GoldStorage += (cost - baseCost);
+                    callingNPC.Conq.GuildInfo.GoldStorage += (cost - baseCost);
                 }
             }
+
             player.GainItem(item);
 
             if (isUsed)
@@ -1191,19 +1219,19 @@ namespace Server.MirObjects
 
                 callingNPC.NeedSave = true;
 
-                player.Enqueue(new S.NPCGoods 
-                { 
-                    List = newGoodsList, 
-                    Rate = PriceRate(player), 
-                    HideAddedStats = Settings.GoodsHideAddedStats, 
-                    Type = player.NPCPage.Key.ToUpper() == BuyUsedKey ? PanelType.BuySub : PanelType.Buy 
+                player.SendNPCGoods(new S.NPCGoods
+                {
+                    List = newGoodsList,
+                    Rate = PriceRate(player),
+                    HideAddedStats = Settings.GoodsHideAddedStats,
+                    Type = player.NPCPage.Key.ToUpper() == BuyUsedKey ? PanelType.BuySub : PanelType.Buy
                 });
             }
 
             if (isBuyBack)
             {
                 callingNPC.BuyBack[player.Name].Remove(goods); //If used or buyback will destroy whole stack instead of reducing to remaining quantity
-                player.Enqueue(new S.NPCGoods { List = callingNPC.BuyBack[player.Name], Rate = PriceRate(player), HideAddedStats = false });
+                player.SendNPCGoods(new S.NPCGoods { List = callingNPC.BuyBack[player.Name], Rate = PriceRate(player), HideAddedStats = false });
             }
         }
         public void Sell(PlayerObject player, UserItem item)
@@ -1231,7 +1259,7 @@ namespace Server.MirObjects
                 return;
             }
 
-            if (player.Account.Gold < recipe.Gold)
+            if (player.Account.Gold < (recipe.Gold * count))
             {
                 player.Enqueue(p);
                 return;
@@ -1402,8 +1430,8 @@ namespace Server.MirObjects
             }
 
             //Take Gold
-            player.Account.Gold -= recipe.Gold;
-            player.Enqueue(new S.LoseGold { Gold = recipe.Gold });
+            player.Account.Gold -= (recipe.Gold * count);
+            player.Enqueue(new S.LoseGold { Gold = (recipe.Gold * count) });
 
             if (Envir.Random.Next(100) >= recipe.Chance + player.Stats[Stat.CraftRatePercent])
             {

@@ -1,10 +1,5 @@
 ﻿using Client.MirControls;
 using Client.MirGraphics;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Drawing;
 using Client.MirSounds;
 
 namespace Client.MirScenes.Dialogs
@@ -353,8 +348,9 @@ namespace Client.MirScenes.Dialogs
         {
             if (Settings.TransparentChat)
             {
-                GameScene.Scene.ChatDialog.ForeColour = Color.FromArgb(190, 15, 0, 0);
-                GameScene.Scene.ChatDialog.BackColour = Color.FromArgb(190, 15, 0, 0);
+                GameScene.Scene.ChatDialog.ForeColour = Color.FromArgb(15, 0, 0);
+                GameScene.Scene.ChatDialog.BackColour = Color.FromArgb(15, 0, 0);
+                GameScene.Scene.ChatDialog.Opacity = 0.8f;
 
                 TransparencyOnButton.Index = 474;
                 TransparencyOnButton.HoverIndex = 475;
@@ -366,6 +362,7 @@ namespace Client.MirScenes.Dialogs
             {
                 GameScene.Scene.ChatDialog.ForeColour = Color.White;
                 GameScene.Scene.ChatDialog.BackColour = Color.White;
+                GameScene.Scene.ChatDialog.Opacity = 1;
 
                 TransparencyOnButton.Index = 473;
                 TransparencyOnButton.HoverIndex = 473;

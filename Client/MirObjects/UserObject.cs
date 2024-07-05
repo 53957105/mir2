@@ -1,9 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Linq;
-using System.Text;
-using Client.MirScenes;
+﻿using Client.MirScenes;
+using Client.MirScenes.Dialogs;
 using S = ServerPackets;
 
 namespace Client.MirObjects
@@ -36,9 +32,10 @@ namespace Client.MirObjects
 
         public BaseStats CoreStats = new BaseStats(0);
 
+        public virtual BuffDialog GetBuffDialog => GameScene.Scene.BuffsDialog;
 
         public UserItem[] Inventory = new UserItem[46], Equipment = new UserItem[14], Trade = new UserItem[10], QuestInventory = new UserItem[40];
-        public int BeltIdx = 6;
+        public int BeltIdx = 6, HeroBeltIdx = 2;
         public bool HasExpandedStorage = false;
         public DateTime ExpandedStorageExpiryTime;
 
@@ -46,27 +43,29 @@ namespace Client.MirObjects
         public List<ItemSets> ItemSets = new List<ItemSets>();
         public List<EquipmentSlot> MirSet = new List<EquipmentSlot>();
 
-        public List<ClientIntelligentCreature> IntelligentCreatures = new List<ClientIntelligentCreature>();//IntelligentCreature
-        public IntelligentCreatureType SummonedCreatureType = IntelligentCreatureType.None;//IntelligentCreature
-        public bool CreatureSummoned;//IntelligentCreature
+        public List<ClientIntelligentCreature> IntelligentCreatures = new List<ClientIntelligentCreature>();
+        public IntelligentCreatureType SummonedCreatureType = IntelligentCreatureType.None;
+        public bool CreatureSummoned;
         public int PearlCount = 0;
 
         public List<ClientQuestProgress> CurrentQuests = new List<ClientQuestProgress>();
         public List<int> CompletedQuests = new List<int>();
         public List<ClientMail> Mail = new List<ClientMail>();
 
+        public bool Slaying, Thrusting, HalfMoon, CrossHalfMoon, DoubleSlash, TwinDrakeBlade, FlamingSword;
         public ClientMagic NextMagic;
         public Point NextMagicLocation;
         public MapObject NextMagicObject;
         public MirDirection NextMagicDirection;
         public QueuedAction QueuedAction;
 
+        public UserObject() { }
         public UserObject(uint objectID) : base(objectID)
         {
             Stats = new Stats();
         }
 
-        public void Load(S.UserInformation info)
+        public virtual void Load(S.UserInformation info)
         {
             Id = info.RealId;
             Name = info.Name;
@@ -106,9 +105,9 @@ namespace Client.MirObjects
                 Magics[i].CastTime += CMain.Time;
             }
 
-            IntelligentCreatures = info.IntelligentCreatures;//IntelligentCreature
-            SummonedCreatureType = info.SummonedCreatureType;//IntelligentCreature
-            CreatureSummoned = info.CreatureSummoned;//IntelligentCreature
+            IntelligentCreatures = info.IntelligentCreatures;
+            SummonedCreatureType = info.SummonedCreatureType;
+            CreatureSummoned = info.CreatureSummoned;
 
             BindAllItems();
 
@@ -219,18 +218,34 @@ namespace Client.MirObjects
                 UserItem temp = Equipment[i];
                 if (temp == null) continue;
 
-                ItemInfo RealItem = Functions.GetRealItem(temp.Info, Level, Class, GameScene.ItemInfoList);
+                ItemInfo realItem = Functions.GetRealItem(temp.Info, Level, Class, GameScene.ItemInfoList);
 
-                if (RealItem.Type == ItemType.Weapon || RealItem.Type == ItemType.Torch)
+                if (realItem.Type == ItemType.Weapon || realItem.Type == ItemType.Torch)
                     CurrentHandWeight = (int)Math.Min(int.MaxValue, CurrentHandWeight + temp.Weight);
                 else
                     CurrentWearWeight = (int)Math.Min(int.MaxValue, CurrentWearWeight + temp.Weight);
 
-                if (temp.CurrentDura == 0 && RealItem.Durability > 0) continue;
+                if (temp.CurrentDura == 0 && realItem.Durability > 0) continue;
+
+                if (realItem.Type == ItemType.Armour)
+                {
+                    Armour = realItem.Shape;
+                    WingEffect = realItem.Effect;
+                }
+                if (realItem.Type == ItemType.Weapon)
+                {
+                    Weapon = realItem.Shape;
+                    WeaponEffect = realItem.Effect;
+                }
+
+                if (realItem.Type == ItemType.Mount)
+                {
+                    MountType = realItem.Shape;
+                }
 
                 if (temp.Info.IsFishingRod) continue;
 
-                Stats.Add(RealItem.Stats);
+                Stats.Add(realItem.Stats);
                 Stats.Add(temp.AddedStats);
 
                 Stats[Stat.MinAC] += temp.Awake.GetAC();
@@ -248,49 +263,35 @@ namespace Client.MirObjects
                 Stats[Stat.HP] += temp.Awake.GetHPMP();
                 Stats[Stat.MP] += temp.Awake.GetHPMP();
 
-                if (RealItem.Light > Light) Light = RealItem.Light;
-                if (RealItem.Unique != SpecialItemMode.None)
+                if (realItem.Light > Light) Light = realItem.Light;
+                if (realItem.Unique != SpecialItemMode.None)
                 {
-                    ItemMode |= RealItem.Unique;
+                    ItemMode |= realItem.Unique;
                 }
 
-                if (RealItem.CanFastRun)
+                if (realItem.CanFastRun)
                 {
                     FastRun = true;
                 }
 
                 RefreshSocketStats(temp);
 
-                if (RealItem.Type == ItemType.Armour)
-                {
-                    Armour = RealItem.Shape;
-                    WingEffect = RealItem.Effect;
-                }
-                if (RealItem.Type == ItemType.Weapon)
-                {
-                    Weapon = RealItem.Shape;
-                    WeaponEffect = RealItem.Effect;
-                }
+                if (realItem.Set == ItemSet.None) continue;
 
-                if (RealItem.Type == ItemType.Mount)
-                    MountType = RealItem.Shape;
-
-                if (RealItem.Set == ItemSet.None) continue;
-
-                ItemSets itemSet = ItemSets.Where(set => set.Set == RealItem.Set && !set.Type.Contains(RealItem.Type) && !set.SetComplete).FirstOrDefault();
+                ItemSets itemSet = ItemSets.Where(set => set.Set == realItem.Set && !set.Type.Contains(realItem.Type) && !set.SetComplete).FirstOrDefault();
 
                 if (itemSet != null)
                 {
-                    itemSet.Type.Add(RealItem.Type);
+                    itemSet.Type.Add(realItem.Type);
                     itemSet.Count++;
                 }
                 else
                 {
-                    ItemSets.Add(new ItemSets { Count = 1, Set = RealItem.Set, Type = new List<ItemType> { RealItem.Type } });
+                    ItemSets.Add(new ItemSets { Count = 1, Set = realItem.Set, Type = new List<ItemType> { realItem.Type } });
                 }
 
                 //Mir Set
-                if (RealItem.Set == ItemSet.Mir)
+                if (realItem.Set == ItemSet.Mir)
                 {
                     if (!MirSet.Contains((EquipmentSlot)i))
                         MirSet.Add((EquipmentSlot)i);
@@ -325,22 +326,22 @@ namespace Client.MirObjects
                 UserItem temp = equipItem.Slots[i];
 
                 if (temp == null) continue;
-                ItemInfo RealItem = Functions.GetRealItem(temp.Info, Level, Class, GameScene.ItemInfoList);
+                ItemInfo realItem = Functions.GetRealItem(temp.Info, Level, Class, GameScene.ItemInfoList);
 
-                if (RealItem.Type == ItemType.Weapon || RealItem.Type == ItemType.Torch)
+                if (realItem.Type == ItemType.Weapon || realItem.Type == ItemType.Torch)
                     CurrentHandWeight = (int)Math.Min(int.MaxValue, CurrentHandWeight + temp.Weight);
                 else
                     CurrentWearWeight = (int)Math.Min(int.MaxValue, CurrentWearWeight + temp.Weight);
 
-                if (temp.CurrentDura == 0 && RealItem.Durability > 0) continue;
+                if (temp.CurrentDura == 0 && realItem.Durability > 0) continue;
 
-                Stats.Add(RealItem.Stats);
+                Stats.Add(realItem.Stats);
                 Stats.Add(temp.AddedStats);
         
-                if (RealItem.Light > Light) Light = RealItem.Light;
-                if (RealItem.Unique != SpecialItemMode.None)
+                if (realItem.Light > Light) Light = realItem.Light;
+                if (realItem.Unique != SpecialItemMode.None)
                 {
-                    ItemMode |= RealItem.Unique;
+                    ItemMode |= realItem.Unique;
                 }
             }
         }
@@ -387,7 +388,6 @@ namespace Client.MirObjects
                         break;
                     case ItemSet.RedOrchid:
                         Stats[Stat.Accuracy] += 2;
-                        Stats[Stat.HPDrainRatePercent] += 10;
                         break;
                     case ItemSet.RedFlower:
                         Stats[Stat.HP] += 50;
@@ -610,10 +610,11 @@ namespace Client.MirObjects
         private void RefreshBuffs()
         {
             TransformType = -1;
+            BuffDialog dialog = GetBuffDialog;
 
-            for (int i = 0; i < GameScene.Scene.BuffsDialog.Buffs.Count; i++)
+            for (int i = 0; i < dialog.Buffs.Count; i++)
             {
-                ClientBuff buff = GameScene.Scene.BuffsDialog.Buffs[i];
+                ClientBuff buff = dialog.Buffs[i];
 
                 Stats.Add(buff.Stats);
 
@@ -715,109 +716,63 @@ namespace Client.MirObjects
 
         public void GetMaxGain(UserItem item)
         {
-            if (CurrentBagWeight + item.Weight <= Stats[Stat.BagWeight] && FreeSpace(Inventory) > 0) return;
+            int freeSpace = FreeSpace(Inventory);
 
-            ushort min = 0;
-            ushort max = item.Count;
-
-            if (CurrentBagWeight >= Stats[Stat.BagWeight])
+            if (freeSpace > 0)
             {
-
-            }
-
-            if (item.Info.Type == ItemType.Amulet)
-            {
-                for (int i = 0; i < Inventory.Length; i++)
-                {
-                    UserItem bagItem = Inventory[i];
-
-                    if (bagItem == null || bagItem.Info != item.Info) continue;
-
-                    if (bagItem.Count + item.Count <= bagItem.Info.StackSize)
-                    {
-                        item.Count = max;
-                        return;
-                    }
-                    item.Count = (ushort)(bagItem.Info.StackSize - bagItem.Count);
-                    min += item.Count;
-                    if (min >= max)
-                    {
-                        item.Count = max;
-                        return;
-                    }
-                }
-
-                if (min == 0)
-                {
-                    GameScene.Scene.ChatDialog.ReceiveChat(FreeSpace(Inventory) == 0 ? GameLanguage.NoBagSpace : "You do not have enough weight.", ChatType.System);
-
-                    item.Count = 0;
-                    return;
-                }
-
-                item.Count = min;
                 return;
             }
 
-            if (CurrentBagWeight + item.Weight > Stats[Stat.BagWeight])
+            ushort canGain = 0;
+
+            foreach (UserItem inventoryItem in Inventory)
             {
-                item.Count = (ushort)(Math.Max((Stats[Stat.BagWeight] - CurrentBagWeight), ushort.MinValue) / item.Info.Weight);
-                max = item.Count;
-                if (item.Count == 0)
+                if (inventoryItem.Info != item.Info)
                 {
-                    GameScene.Scene.ChatDialog.ReceiveChat("You do not have enough weight.", ChatType.System);
+                    continue;
+                }
+
+                int availableStack = inventoryItem.Info.StackSize - inventoryItem.Count;
+
+                if (availableStack == 0)
+                {
+                    continue;
+                }
+
+                canGain += (ushort)availableStack;
+
+                if (canGain >= item.Count)
+                {
                     return;
                 }
             }
 
-            if (item.Info.StackSize > 1)
+            if (canGain == 0)
             {
-                for (int i = 0; i < Inventory.Length; i++)
-                {
-                    UserItem bagItem = Inventory[i];
-
-                    if (bagItem == null) return;
-                    if (bagItem.Info != item.Info) continue;
-
-                    if (bagItem.Count + item.Count <= bagItem.Info.StackSize)
-                    {
-                        item.Count = max;
-                        return;
-                    }
-
-                    item.Count = (ushort)(bagItem.Info.StackSize - bagItem.Count);
-                    min += item.Count;
-                    if (min >= max)
-                    {
-                        item.Count = max;
-                        return;
-                    }
-                }
-
-                if (min == 0)
-                {
-                    GameScene.Scene.ChatDialog.ReceiveChat(GameLanguage.NoBagSpace, ChatType.System);
-                    item.Count = 0;
-                }
-            }
-            else
-            {
-                GameScene.Scene.ChatDialog.ReceiveChat(GameLanguage.NoBagSpace, ChatType.System);
                 item.Count = 0;
+                return;
             }
 
+            item.Count = canGain;
         }
         private int FreeSpace(UserItem[] array)
         {
-            int count = 0;
-            for (int i = 0; i < array.Length; i++)
-                count++;
-            return count;
+            int freeSlots = 0;
+
+            foreach (UserItem slot in array)
+            {
+                if (slot == null)
+                {
+                    freeSlots++;
+                }
+            }
+
+            return freeSlots;
         }
 
         public override void SetAction()
         {
-            if (QueuedAction != null )
+            if (QueuedAction != null && !GameScene.Observing)
             {
                 if ((ActionFeed.Count == 0) || (ActionFeed.Count == 1 && NextAction.Action == MirAction.Stance))
                 {

@@ -1,11 +1,7 @@
-﻿using System.Collections.Generic;
-using System;
 using System.Drawing;
-using Server.MirDatabase;
+﻿using Server.MirDatabase;
 using Server.MirEnvir;
 using S = ServerPackets;
-using System.Linq;
-using System.Text;
 
 namespace Server.MirObjects.Monsters
 {
@@ -45,7 +41,7 @@ namespace Server.MirObjects.Monsters
             return base.Attacked(attacker, damage, type);
         }
 
-        public override int Attacked(PlayerObject attacker, int damage, DefenceType type = DefenceType.ACAgility, bool damageWeapon = true)
+        public override int Attacked(HumanObject attacker, int damage, DefenceType type = DefenceType.ACAgility, bool damageWeapon = true)
         {
             return base.Attacked(attacker, damage, type, damageWeapon);
         }
@@ -191,8 +187,6 @@ namespace Server.MirObjects.Monsters
         {
             if (Dead) return;
 
-            Broadcast(new S.ObjectRangeAttack { ObjectID = ObjectID, Direction = Direction, Location = CurrentLocation, TargetID = Target.ObjectID, Type = 1 });
-
             var count = CurrentMap.Players.Count;
 
             if (count == 0) return;
@@ -200,6 +194,8 @@ namespace Server.MirObjects.Monsters
             var target = CurrentMap.Players[Envir.Random.Next(count)];
 
             var location = target.CurrentLocation;
+
+            Broadcast(new S.ObjectRangeAttack { ObjectID = ObjectID, Direction = Direction, Location = CurrentLocation, TargetID = target.ObjectID, Type = 1 });
 
             for (int y = location.Y - 3; y <= location.Y + 3; y++)
             {
@@ -306,6 +302,7 @@ namespace Server.MirObjects.Monsters
                 Skeleton = Harvested,
                 Poison = CurrentPoison,
                 Hidden = Hidden,
+                Buffs = Buffs.Where(d => d.Info.Visible).Select(e => e.Type).ToList()
             };
         }
 
@@ -347,9 +344,7 @@ namespace Server.MirObjects.Monsters
                 _groundRootSpawnTime = Envir.Time + (Settings.Second * (_notNear ? next : next * _nearMultiplier));
             }
 
-            if (!CanAttack) return;
-
-            if (Target == null) return;
+            if (Target == null || !CanAttack) return;
 
             if (InAttackRange() && CanAttack)
             {

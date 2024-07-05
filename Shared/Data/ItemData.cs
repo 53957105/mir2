@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 
 public class ItemInfo
 {
@@ -46,7 +42,7 @@ public class ItemInfo
 
     public bool IsConsumable
     {
-        get { return Type == ItemType.Potion || Type == ItemType.Scroll || Type == ItemType.Food || Type == ItemType.Transform || Type == ItemType.Script; }
+        get { return Type == ItemType.Potion || Type == ItemType.Scroll || Type == ItemType.Food || Type == ItemType.Transform || Type == ItemType.Script || Type == ItemType.SealedHero; }
     }
     public bool IsFishingRod
     {
@@ -191,12 +187,14 @@ public class ItemInfo
 
         if (version > 84)
         {
-            Stats = new Stats(reader);
+            Stats = new Stats(reader, version, customVersion);
         }
 
         bool isTooltip = reader.ReadBoolean();
         if (isTooltip)
+        {
             ToolTip = reader.ReadString();
+        }
 
         if (version < 70) //before db version 70 all specialitems had wedding rings disabled, after that it became a server option
         {
@@ -303,6 +301,7 @@ public class UserItem
 
     public ExpireInfo ExpireInfo;
     public RentalInformation RentalInformation;
+    public SealedInfo SealedInfo;
 
     public bool IsShopItem;
 
@@ -317,13 +316,15 @@ public class UserItem
 
     public int Weight
     {
-        get { return Info.Type == ItemType.Amulet ? Info.Weight : Info.Weight * Count; }
+        get { return (Info.Type == ItemType.Amulet || Info.Type == ItemType.Bait) ? Info.Weight : Info.Weight * Count; }
     }
 
     public string FriendlyName
     {
         get { return Count > 1 ? string.Format("{0} ({1})", Info.FriendlyName, Count) : Info.FriendlyName; }
     }
+
+    public bool GMMade { get; set; }
 
     public UserItem(ItemInfo info)
     {
@@ -411,7 +412,7 @@ public class UserItem
 
         if (version > 84)
         {
-            AddedStats = new Stats(reader);
+            AddedStats = new Stats(reader, version, customVersion);
         }
 
         Awake = new Awake(reader);
@@ -429,7 +430,9 @@ public class UserItem
         if (version < 65) return;
 
         if (reader.ReadBoolean())
+        {
             ExpireInfo = new ExpireInfo(reader, version, customVersion);
+        }
 
         if (version < 76)
             return;
@@ -440,6 +443,18 @@ public class UserItem
         if (version < 83) return;
 
         IsShopItem = reader.ReadBoolean();
+
+        if (version < 92) return;
+
+        if (reader.ReadBoolean())
+        {
+            SealedInfo = new SealedInfo(reader, version, customVersion);
+        }
+
+        if (version > 107)
+        {
+            GMMade = reader.ReadBoolean();
+        }
     }
 
     public void Save(BinaryWriter writer)
@@ -486,6 +501,11 @@ public class UserItem
         RentalInformation?.Save(writer);
 
         writer.Write(IsShopItem);
+
+        writer.Write(SealedInfo != null);
+        SealedInfo?.Save(writer);
+
+        writer.Write(GMMade);
     }
 
     public int GetTotal(Stat type)
@@ -677,8 +697,10 @@ public class UserItem
 
             ExpireInfo = ExpireInfo,
             RentalInformation = RentalInformation,
+            SealedInfo = SealedInfo,
 
-            IsShopItem = IsShopItem
+            IsShopItem = IsShopItem,
+            GMMade = GMMade
         };
 
         return item;
@@ -700,6 +722,30 @@ public class ExpireInfo
     public void Save(BinaryWriter writer)
     {
         writer.Write(ExpiryDate.ToBinary());
+    }
+}
+
+public class SealedInfo
+{
+    public DateTime ExpiryDate;
+    public DateTime NextSealDate;
+
+    public SealedInfo() { }
+
+    public SealedInfo(BinaryReader reader, int version = int.MaxValue, int Customversion = int.MaxValue)
+    {
+        ExpiryDate = DateTime.FromBinary(reader.ReadInt64());
+
+        if (version > 92)
+        {
+            NextSealDate = DateTime.FromBinary(reader.ReadInt64());
+        }
+    }
+
+    public void Save(BinaryWriter writer)
+    {
+        writer.Write(ExpiryDate.ToBinary());
+        writer.Write(NextSealDate.ToBinary());
     }
 }
 
@@ -744,6 +790,8 @@ public class GameShopItem
     public bool Deal = false;
     public bool TopItem = false;
     public DateTime Date;
+    public bool CanBuyGold = false;
+    public bool CanBuyCredit = false;
 
     public GameShopItem()
     {
@@ -770,6 +818,12 @@ public class GameShopItem
         Deal = reader.ReadBoolean();
         TopItem = reader.ReadBoolean();
         Date = DateTime.FromBinary(reader.ReadInt64());
+        if (version > 105)
+        {
+            CanBuyGold = reader.ReadBoolean();
+            CanBuyCredit = reader.ReadBoolean();
+        }
+
     }
 
     public GameShopItem(BinaryReader reader, bool packet = false)
@@ -787,6 +841,8 @@ public class GameShopItem
         Deal = reader.ReadBoolean();
         TopItem = reader.ReadBoolean();
         Date = DateTime.FromBinary(reader.ReadInt64());
+        CanBuyCredit = reader.ReadBoolean();
+        CanBuyGold = reader.ReadBoolean();
     }
 
     public void Save(BinaryWriter writer, bool packet = false)
@@ -804,6 +860,8 @@ public class GameShopItem
         writer.Write(Deal);
         writer.Write(TopItem);
         writer.Write(Date.ToBinary());
+        writer.Write(CanBuyCredit);
+        writer.Write(CanBuyGold);
     }
 
     public override string ToString()
@@ -1036,10 +1094,9 @@ public class ItemRentalInformation
     public string RentingPlayerName;
     public DateTime ItemReturnDate;
 
-    public ItemRentalInformation()
-    { }
+    public ItemRentalInformation() { }
 
-    public ItemRentalInformation(BinaryReader reader)
+    public ItemRentalInformation(BinaryReader reader, int version = int.MaxValue, int customVersion = int.MaxValue)
     {
         ItemId = reader.ReadUInt64();
         ItemName = reader.ReadString();

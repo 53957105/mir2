@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Linq;
-using System.Text;
-using Client.MirGraphics;
+﻿using Client.MirGraphics;
 using Client.MirScenes;
 using Client.MirSounds;
 
@@ -28,6 +23,7 @@ namespace Client.MirObjects
         public bool Blend = true;
         public float Rate = 1F;
         public Point DrawLocation;
+        public Point DrawOffset = Point.Empty;
         public bool Repeat;
         public long RepeatUntil;
 
@@ -125,6 +121,7 @@ namespace Client.MirObjects
             {
                 DrawLocation = new Point((Source.X - MapObject.User.Movement.X + MapControl.OffSetX) * MapControl.CellWidth,
                                          (Source.Y - MapObject.User.Movement.Y + MapControl.OffSetY) * MapControl.CellHeight);
+                DrawLocation.Offset(DrawOffset);
                 DrawLocation.Offset(MapObject.User.OffSetMove);
             }
 

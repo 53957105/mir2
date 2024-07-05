@@ -1,6 +1,4 @@
-﻿using System;
-
-public enum MouseCursor : byte
+﻿public enum MouseCursor : byte
 {
     None,
     Default,
@@ -11,7 +9,21 @@ public enum MouseCursor : byte
     Trash,
     Upgrade
 }
-
+//[Flags]
+public enum WeatherSetting : ushort
+{
+    None = 0,
+    Fog = 1,
+    RedEmber = 2,
+    WhiteEmber = 4,
+    YellowEmber = 8,
+    FireParticle = 16,
+    Snow = 32,
+    Rain = 64,
+    Leaves = 128,
+    FireyLeaves = 256,
+    PurpleLeaves = 512,
+}
 public enum PanelType : byte
 {
     Buy,
@@ -87,12 +99,18 @@ public enum AwakeType : byte
 }
 
 [Flags]
-public enum LevelEffects : byte
+public enum LevelEffects : ushort
 {
     None = 0,
-    Mist = 0x0001,
-    RedDragon = 0x0002,
-    BlueDragon = 0x0004
+    Mist = 1,
+    RedDragon = 2,
+    BlueDragon = 4,
+    Rebirth1 = 8,
+    Rebirth2 = 16,
+    Rebirth3 = 32,
+    NewBlue = 64,
+    YellowDragon = 128,
+    Phoenix = 256
 }
 
 public enum OutputMessageType : byte
@@ -109,6 +127,7 @@ public enum ItemGrade : byte
     Rare = 2,
     Legendary = 3,
     Mythical = 4,
+    Heroic = 5,
 }
 
 
@@ -146,6 +165,11 @@ public enum QuestState : byte
     Add,
     Update,
     Remove
+}
+
+public enum QuestAction : byte
+{
+    TimeExpired
 }
 
 public enum DefaultNPCType : byte
@@ -656,6 +680,7 @@ public enum Monster : ushort
     GrassElemental = 462,
     RockElemental = 463,
 
+    //Special
     EvilMir = 900,
     EvilMirBody = 901,
     DragonStatue = 902,
@@ -663,6 +688,14 @@ public enum Monster : ushort
     HellBomb2 = 904,
     HellBomb3 = 905,
 
+    //Siege
+    Catapult = 940,
+    ChariotBallista = 941,
+    Ballista = 942,
+    Trebuchet = 943,
+    CanonTrebuchet = 944,
+
+    //Gates
     SabukGate = 950,
     PalaceWallLeft = 951,
     PalaceWall1 = 952,
@@ -679,6 +712,9 @@ public enum Monster : ushort
     NammandWallSection = 963, //Not Coded
     FrozenDoor = 964, //Not Coded
 
+    //Flags 1000 ~ 1100
+
+    //Creatures
     BabyPig = 10000,//Permanent
     Chick = 10001,//Special
     Kitten = 10002,//Permanent
@@ -800,7 +836,8 @@ public enum ObjectType : byte
     Spell = 4,
     Monster = 5,
     Deco = 6,
-    Creature = 7
+    Creature = 7,
+    Hero = 8
 }
 
 public enum ChatType : byte
@@ -864,7 +901,10 @@ public enum ItemType : byte
     Pets = 36,
     Transform = 37,
     Deco = 38,
-    Socket = 39
+    Socket = 39,
+    MonsterSpawn = 40,
+    SiegeAmmo = 41, //TODO
+    SealedHero = 42
 }
 
 public enum MirGridType : byte
@@ -889,7 +929,11 @@ public enum MirGridType : byte
     Renting = 17,
     GuestRenting = 18,
     Craft = 19,
-    Socket = 20
+    Socket = 20,
+    HeroEquipment = 21,
+    HeroInventory = 22,
+    HeroHPItem = 23,
+    HeroMPItem = 24
 }
 
 public enum EquipmentSlot : byte
@@ -944,6 +988,7 @@ public enum PetMode : byte
     MoveOnly = 1,
     AttackOnly = 2,
     None = 3,
+    FocusMasterTarget = 4
 }
 
 [Flags]
@@ -982,7 +1027,8 @@ public enum BindMode : short
     NoWeddingRing = 2048,//0x0800
     UnableToRent = 4096,
     UnableToDisassemble = 8192,
-    NoMail = 16384
+    NoMail = 16384,
+    NoHero = -32768
 }
 
 [Flags]
@@ -1171,6 +1217,7 @@ public enum Spell : byte
     Hemorrhage = 104,
     CrescentSlash = 105,
     MoonMist = 106,
+    CatTongue = 107,
 
     //Archer
     Focus = 121,
@@ -1258,7 +1305,9 @@ public enum SpellEffect : byte
     KingGuard2,    
     DeathCrawlerBreath,
     FlamingMutantWeb,
-    Tester    
+    FurbolgWarriorCritical,
+    Tester,
+    MoonMist
 }
 
 
@@ -1301,6 +1350,7 @@ public enum BuffType : byte
     PowerBeadBuff,
     HornedWarriorShield,
     HornedCommanderShield,
+    Blindness,
 
     //Special
     GameMaster = 100,
@@ -1310,7 +1360,7 @@ public enum BuffType : byte
     Gold,
     BagWeight,
     Transform,
-    RelationshipEXP,
+    Lover,
     Mentee,
     Mentor,
     Guild,
@@ -1318,6 +1368,7 @@ public enum BuffType : byte
     Rested,
     Skill,
     ClearRing,
+    Newbie,
 
     //Stats
     Impact = 200,
@@ -1349,7 +1400,9 @@ public enum BuffStackType : byte
     StackDuration,
     StackStat,
     StackStatAndDuration,
-    Infinite
+    Infinite,
+    ResetStat,
+    ResetStatAndDuration
 }
 
 public enum DefenceType : byte
@@ -1383,10 +1436,14 @@ public enum ServerPacketIds : short
     StartGameBanned,
     StartGameDelay,
     MapInformation,
+    NewMapInfo,
+    WorldMapSetup,
+    SearchMapResult,
     UserInformation,
     UserSlotsRefresh,
     UserLocation,
     ObjectPlayer,
+    ObjectHero,
     ObjectRemove,
     ObjectTurn,
     ObjectWalk,
@@ -1394,6 +1451,7 @@ public enum ServerPacketIds : short
     Chat,
     ObjectChat,
     NewItemInfo,
+    NewHeroInfo,
     NewChatItem,
     MoveItem,
     EquipItem,
@@ -1412,10 +1470,13 @@ public enum ServerPacketIds : short
     RetrieveTradeItem,
     UseItem,
     DropItem,
+    TakeBackHeroItem,
+    TransferHeroItem,
     PlayerUpdate,
     PlayerInspect,
     LogOutSuccess,
     LogOutFailed,
+    ReturnToLogin,
     TimeOfDay,
     ChangeAMode,
     ChangePMode,
@@ -1433,6 +1494,7 @@ public enum ServerPacketIds : short
     DamageIndicator,
     DuraChanged,
     HealthChanged,
+    HeroHealthChanged,
     DeleteItem,
     Death,
     ObjectDied,
@@ -1440,7 +1502,9 @@ public enum ServerPacketIds : short
     ObjectColourChanged,
     ObjectGuildNameChanged,
     GainExperience,
+    GainHeroExperience,
     LevelChanged,
+    HeroLevelChanged,
     ObjectLeveled,
     ObjectHarvest,
     ObjectHarvested,
@@ -1468,6 +1532,7 @@ public enum ServerPacketIds : short
     RepairItem,
     ItemRepaired,
     ItemSlotSizeChanged,
+    ItemSealChanged,
     NewMagic,
     RemoveMagic,
     MagicLeveled,
@@ -1491,7 +1556,9 @@ public enum ServerPacketIds : short
     ObjectRevived,
     SpellToggle,
     ObjectHealth,
+    ObjectMana,
     MapEffect,
+    AllowObserve,
     ObjectRangeAttack,
     AddBuff,
     RemoveBuff,
@@ -1512,6 +1579,7 @@ public enum ServerPacketIds : short
     ObjectSitDown,
     InTrapRock,
     BaseStatsInfo,
+    HeroBaseStatsInfo,
     UserName,
     ChatItemStats,
     GuildNoticeChange,
@@ -1524,6 +1592,16 @@ public enum ServerPacketIds : short
     GuildStorageItemChange,
     GuildStorageList,
     GuildRequestWar,
+    HeroCreateRequest,
+    NewHero,
+    HeroInformation,
+    UpdateHeroSpawnState,
+    UnlockHeroAutoPot,
+    SetAutoPotValue,
+    SetAutoPotItem,
+    SetHeroBehaviour,
+    ManageHeroes,
+    ChangeHero,
     DefaultNPC,
     NPCUpdate,
     NPCImageUpdate,
@@ -1610,7 +1688,10 @@ public enum ServerPacketIds : short
     SetTimer,
     ExpireTimer,
     UpdateNotice,
-    Roll
+    Roll,
+    SetCompass,
+    GroupMembersMap,
+    SendMemberLocation,
 }
 
 public enum ClientPacketIds : short
@@ -1647,9 +1728,15 @@ public enum ClientPacketIds : short
     ReplaceWedRing,
     DepositTradeItem,
     RetrieveTradeItem,
+    TakeBackHeroItem,
+    TransferHeroItem,
     DropGold,
     PickUp,
+    RequestMapInfo,
+    TeleportToNPC,
+    SearchMap,
     Inspect,
+    Observe,
     ChangeAMode,
     ChangePMode,
     ChangeTrade,
@@ -1669,6 +1756,11 @@ public enum ClientPacketIds : short
     AddMember,
     DellMember,
     GroupInvite,
+    NewHero,
+    SetAutoPotValue,
+    SetAutoPotItem,
+    SetHeroBehaviour,
+    ChangeHero,
     TownRevive,
     SpellToggle,
     ConsignItem,
@@ -1798,4 +1890,27 @@ public enum IntelligentCreaturePickupMode : byte
 {
     Automatic = 0,
     SemiAutomatic = 1,
+}
+
+public enum HeroSpawnState : byte
+{
+    None = 0,
+    Unsummoned = 1,
+    Summoned = 2,
+    Dead = 3
+}
+
+public enum HeroBehaviour : byte
+{
+    Attack = 0,
+    CounterAttack = 1,
+    Follow = 2,
+    Custom = 3
+}
+
+public enum SpellToggleState: sbyte
+{
+    None = -1,
+    False = 0,
+    True = 1
 }

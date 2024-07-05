@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Server.MirObjects
+﻿namespace Server.MirObjects
 {
     public class NPCChecks
     {
@@ -61,6 +57,7 @@ namespace Server.MirObjects
         CheckPermission,
         ConquestAvailable,
         ConquestOwner,
-        CheckGuildNameList
+        CheckGuildNameList,
+        CheckTimer
     }
 }

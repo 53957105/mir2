@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace Server.MirObjects
+﻿namespace Server.MirObjects
 {
     public class NPCActions
     {
@@ -104,6 +100,11 @@ namespace Server.MirObjects
         ExpireTimer,
         UnequipItem,
         RollDie,
-        RollYut
+        RollYut,
+        Drop,
+        ReviveHero,
+        SealHero,
+        DeleteHero,
+        ConquestRepairAll
     }
 }

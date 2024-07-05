@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.IO;
+﻿using System.Drawing;
 
 public class InIReader
 {
@@ -14,6 +11,11 @@ public class InIReader
     public InIReader(string fileName)
     {
         _fileName = fileName;
+
+        if (!Directory.Exists(Path.GetDirectoryName(fileName)))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(fileName));
+        }
 
         _contents = new List<string>();
         try

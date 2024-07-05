@@ -1,5 +1,4 @@
 ﻿using Server.MirDatabase;
-using System.Collections.Generic;
 using S = ServerPackets;
 
 namespace Server.MirObjects.Monsters
@@ -89,8 +88,8 @@ namespace Server.MirObjects.Monsters
 
             if (poison)
             {
-                PoisonTarget(Target, 5, 5, PoisonType.Slow, 1000);
-                PoisonTarget(Target, 10, 3, PoisonType.Frozen, 1000);
+                PoisonTarget(target, 5, 5, PoisonType.Slow, 1000);
+                PoisonTarget(target, 10, 3, PoisonType.Frozen, 1000);
             }
         }
 

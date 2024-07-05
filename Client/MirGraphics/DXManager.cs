@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Drawing.Drawing2D;
+﻿using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using Client.MirControls;
 using Client.MirScenes;
@@ -16,9 +13,8 @@ namespace Client.MirGraphics
         public static List<MImage> TextureList = new List<MImage>();
         public static List<MirControl> ControlList = new List<MirControl>();
 
-
         public static Device Device;
-        public static Sprite Sprite, TextSprite;
+        public static Sprite Sprite;
         public static Line Line;
 
         public static Surface CurrentSurface;
@@ -41,7 +37,6 @@ namespace Client.MirGraphics
         public static PixelShader GrayScalePixelShader;
         public static PixelShader NormalPixelShader;
         public static PixelShader MagicPixelShader;
-        public static PixelShader ShadowPixelShader;
 
         public static bool GrayScale;
 
@@ -125,7 +120,6 @@ namespace Client.MirGraphics
         private static unsafe void LoadTextures()
         {
             Sprite = new Sprite(Device);
-            TextSprite = new Sprite(Device);
             Line = new Line(Device) { Width = 1F };
 
             MainSurface = Device.GetBackBuffer(0, 0);
@@ -140,6 +134,7 @@ namespace Client.MirGraphics
                 using (Bitmap image = new Bitmap(2, 2, 8, PixelFormat.Format32bppArgb, stream.Data.DataPointer))
                 using (Graphics graphics = Graphics.FromImage(image))
                     graphics.Clear(Color.White);
+                RadarTexture.UnlockRectangle(0);
             }
             if (PoisonDotBackground == null || PoisonDotBackground.Disposed)
             {
@@ -149,6 +144,7 @@ namespace Client.MirGraphics
                 using (Bitmap image = new Bitmap(5, 5, 20, PixelFormat.Format32bppArgb, stream.Data.DataPointer))
                 using (Graphics graphics = Graphics.FromImage(image))
                     graphics.Clear(Color.White);
+                PoisonDotBackground.UnlockRectangle(0);
             }
             CreateLights();
         }
@@ -213,6 +209,8 @@ namespace Client.MirGraphics
                         }
                     }
                 }
+
+                light.UnlockRectangle(0);
                 //light.Disposing += (o, e) => Lights.Remove(light);
                 Lights.Add(light);
             }
@@ -243,6 +241,18 @@ namespace Client.MirGraphics
                 Sprite.Flush();
                 Device.PixelShader = null;
             }
+        }
+
+        public static void DrawOpaque(Texture texture, Rectangle? sourceRect, Vector3? position, Color4 color, float opacity)
+        {
+            color.Alpha = opacity;
+            Draw(texture, sourceRect, position, color);
+        }
+
+        public static void Draw(Texture texture, Rectangle? sourceRect, Vector3? position, Color4 color)
+        {
+            Sprite.Draw(texture, sourceRect, Vector3.Zero, position, color);
+            CMain.DPSCounter++;
         }
 
         public static void AttemptReset()
@@ -566,5 +576,16 @@ namespace Client.MirGraphics
             ControlList.Clear();
         }
 
+        public static void Dispose()
+        {
+            CleanUp();
+
+            Device?.Direct3D?.Dispose();
+            Device?.Dispose();
+
+            NormalPixelShader?.Dispose();
+            GrayScalePixelShader?.Dispose();
+            MagicPixelShader?.Dispose();
+        }
     }
 }

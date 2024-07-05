@@ -1,25 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Globalization;
-using System.IO;
-using System.Linq;
-using System.Text.RegularExpressions;
-using System.Windows.Forms;
+﻿using System.Text.RegularExpressions;
 using Client.MirControls;
 using Client.MirGraphics;
 using Client.MirNetwork;
 using Client.MirObjects;
 using Client.MirSounds;
 using SlimDX;
-using SlimDX.Direct3D9;
 using Font = System.Drawing.Font;
-using S = ServerPackets;
 using C = ClientPackets;
-using Effect = Client.MirObjects.Effect;
-
-using Client.MirScenes.Dialogs;
-using System.Drawing.Imaging;
 
 namespace Client.MirScenes.Dialogs
 {
@@ -35,8 +22,10 @@ namespace Client.MirScenes.Dialogs
         public MirButton GameShopButton, MenuButton, InventoryButton, CharacterButton, SkillButton, QuestButton, OptionButton;
         public MirControl HealthOrb;
         public MirLabel HealthLabel, ManaLabel, TopLabel, BottomLabel, LevelLabel, CharacterName, ExperienceLabel, GoldLabel, WeightLabel, SpaceLabel, AModeLabel, PModeLabel, SModeLabel;
+        public HeroInfoPanel HeroInfoPanel;
+        public HeroBehaviourPanel HeroBehaviourPanel;
 
-        public MirButton CustomButton1, CustomButton2;
+        public MirButton HeroMenuButton, HeroSummonButton;
 
         public bool HPOnly
         {
@@ -296,8 +285,6 @@ namespace Client.MirScenes.Dialogs
                     GameScene.PickedUpGold = !GameScene.PickedUpGold && GameScene.Gold > 0;
             };
 
-
-
             WeightBar = new MirImageControl
             {
                 Index = 76,
@@ -323,24 +310,24 @@ namespace Client.MirScenes.Dialogs
                 Size = new Size(26, 14),
             };
 
-            CustomButton1 = new MirButton
+            HeroMenuButton = new MirButton
             {
                 Index = 2164,
                 HoverIndex = 2165,
                 PressedIndex = 2166,
                 Library = Libraries.Prguse,
                 Parent = this,
-                Location = new Point(this.Size.Width - 160, 65),
+                Location = new Point(Size.Width - 160, 65),
                 Size = new Size(20, 20),
                 Sound = SoundList.ButtonA,
-                Visible = !Settings.ModeView
+                Visible = false
             };
-            CustomButton1.Click += (o, e) =>
+            HeroMenuButton.Click += (o, e) =>
             {
-                GameScene.Scene.CustomPanel1.Toggle();
+                GameScene.Scene.HeroMenuPanel.Toggle();
             };
 
-            CustomButton2 = new MirButton
+            HeroSummonButton = new MirButton
             {
                 Index = 2167,
                 HoverIndex = 2168,
@@ -349,12 +336,18 @@ namespace Client.MirScenes.Dialogs
                 Parent = this,
                 Location = new Point(this.Size.Width - 160, 90),
                 Size = new Size(20, 20),
-                Sound = SoundList.ButtonA
+                Sound = SoundList.ButtonA,
+                Visible = false
             };
-            CustomButton2.Click += (o, e) =>
+            HeroSummonButton.Click += (o, e) =>
             {
-                Network.Enqueue(new C.CallNPC { ObjectID = uint.MaxValue });
+                Network.Enqueue(new C.Chat
+                {
+                    Message = "@SUMMONHERO",
+                });
             };
+
+            HeroInfoPanel = new HeroInfoPanel { Parent = this, Visible = false };            
 
             AModeLabel = new MirLabel
             {
@@ -424,6 +417,9 @@ namespace Client.MirScenes.Dialogs
                     break;
                 case PetMode.None:
                     PModeLabel.Text = GameLanguage.PetMode_None;
+                    break;
+                case PetMode.FocusMasterTarget:
+                    PModeLabel.Text = GameLanguage.PetMode_FocusMasterTarget;
                     break;
             }
 
@@ -842,7 +838,6 @@ namespace Client.MirScenes.Dialogs
 
             int chatWidth = Settings.Resolution != 800 ? 614 : 390;
             int index = 0;
-            int matchCount = 0;
 
             for (int i = 1; i < text.Length; i++)
             {
@@ -1497,502 +1492,7 @@ namespace Client.MirScenes.Dialogs
             }
         }
     }
-    public sealed class InventoryDialog : MirImageControl
-    {
-        public MirImageControl WeightBar;
-        public MirImageControl[] LockBar = new MirImageControl[10];
-        public MirItemCell[] Grid;
-        public MirItemCell[] QuestGrid;
 
-        public MirButton CloseButton, ItemButton, ItemButton2, QuestButton, AddButton;
-        public MirLabel GoldLabel, WeightLabel;
-
-        public InventoryDialog()
-        {
-            Index = 196;
-            Library = Libraries.Title;
-            Movable = true;
-            Sort = true;
-            Visible = false;
-
-            WeightBar = new MirImageControl
-            {
-                Index = 24,
-                Library = Libraries.Prguse,
-                Location = new Point(182, 217),
-                Parent = this,
-                DrawImage = false,
-                NotControl = true,
-            };
-
-            ItemButton = new MirButton
-            {
-                Index = 197,
-                Library = Libraries.Title,
-                Location = new Point(6, 7),
-                Parent = this,
-                Size = new Size(72, 23),
-                Sound = SoundList.ButtonA,
-            };
-            ItemButton.Click += Button_Click;
-
-            ItemButton2 = new MirButton
-            {
-                Index = 738,
-                Library = Libraries.Title,
-                Location = new Point(76, 7),
-                Parent = this,
-                Size = new Size(72, 23),
-                Sound = SoundList.ButtonA,
-            };
-            ItemButton2.Click += Button_Click;
-
-            QuestButton = new MirButton
-            {
-                Index = 739,
-                Library = Libraries.Title,
-                Location = new Point(146, 7),
-                Parent = this,
-                Size = new Size(72, 23),
-                Sound = SoundList.ButtonA,
-            };
-            QuestButton.Click += Button_Click;
-
-            AddButton = new MirButton
-            {
-                Index = 483,
-                HoverIndex = 484,
-                PressedIndex = 485,
-                Library = Libraries.Title,
-                Location = new Point(235, 5),
-                Parent = this,
-                Size = new Size(72, 23),
-                Sound = SoundList.ButtonA,
-                Visible = false,
-            };
-            AddButton.Click += (o1, e) =>
-            {
-                int openLevel = (GameScene.User.Inventory.Length - 46) / 4;
-                int openGold = (1000000 + openLevel * 1000000);
-                MirMessageBox messageBox = new MirMessageBox(string.Format(GameLanguage.ExtraSlots4, openGold), MirMessageBoxButtons.OKCancel);
-
-                messageBox.OKButton.Click += (o, a) =>
-                {
-                    Network.Enqueue(new C.Chat { Message = "@ADDINVENTORY" });
-                };
-                messageBox.Show();
-            };
-
-            CloseButton = new MirButton
-            {
-                HoverIndex = 361,
-                Index = 360,
-                Location = new Point(289, 3),
-                Library = Libraries.Prguse2,
-                Parent = this,
-                PressedIndex = 362,
-                Sound = SoundList.ButtonA,
-            };
-            CloseButton.Click += (o, e) => Hide();
-
-            GoldLabel = new MirLabel
-            {
-                Parent = this,
-                Location = new Point(40, 212),
-                Size = new Size(111, 14),
-                Sound = SoundList.Gold,
-            };
-            GoldLabel.Click += (o, e) =>
-            {
-                if (GameScene.SelectedCell == null)
-                    GameScene.PickedUpGold = !GameScene.PickedUpGold && GameScene.Gold > 0;
-            };
-
-
-            Grid = new MirItemCell[8 * 10];
-
-            for (int x = 0; x < 8; x++)
-            {
-                for (int y = 0; y < 10; y++)
-                {
-                    int idx = 8 * y + x;
-                    Grid[idx] = new MirItemCell
-                    {
-                        ItemSlot = 6 + idx,
-                        GridType = MirGridType.Inventory,
-                        Library = Libraries.Items,
-                        Parent = this,
-                        Location = new Point(x * 36 + 9 + x, y % 5 * 32 + 37 + y % 5),
-                    };
-
-                    if (idx >= 40)
-                        Grid[idx].Visible = false;
-                }
-            }
-
-            QuestGrid = new MirItemCell[8 * 5];
-
-            for (int x = 0; x < 8; x++)
-            {
-                for (int y = 0; y < 5; y++)
-                {
-                    QuestGrid[8 * y + x] = new MirItemCell
-                    {
-                        ItemSlot = 8 * y + x,
-                        GridType = MirGridType.QuestInventory,
-                        Library = Libraries.Items,
-                        Parent = this,
-                        Location = new Point(x * 36 + 9 + x, y * 32 + 37 + y),
-                        Visible = false
-                    };
-                }
-            }
-
-            WeightLabel = new MirLabel
-            {
-                Parent = this,
-                Location = new Point(268, 212),
-                Size = new Size(26, 14)
-            };
-            WeightBar.BeforeDraw += WeightBar_BeforeDraw;
-
-            for (int i = 0; i < LockBar.Length; i++)
-            {
-                LockBar[i] = new MirImageControl
-                {
-                    Index = 307,
-                    Library = Libraries.Prguse2,
-                    Location = new Point(9 + i % 2 * 148, 37 + i / 2 * 33),
-                    Parent = this,
-                    DrawImage = true,
-                    NotControl = true,
-                    Visible = false,
-                };
-            }
-
-        }
-
-        void Button_Click(object sender, EventArgs e)
-        {
-            if (GameScene.User.Inventory.Length == 46 && sender == ItemButton2)
-            {
-                MirMessageBox messageBox = new MirMessageBox(GameLanguage.ExtraSlots8, MirMessageBoxButtons.OKCancel);
-
-                messageBox.OKButton.Click += (o, a) =>
-                {
-                    Network.Enqueue(new C.Chat { Message = "@ADDINVENTORY" });
-                };
-                messageBox.Show();
-            }
-            else
-            {
-                if (sender == ItemButton)
-                {
-                    RefreshInventory();
-                }
-                else if (sender == ItemButton2)
-                {
-                    RefreshInventory2();
-                }
-                else if (sender == QuestButton)
-                {
-                    Reset();
-
-                    ItemButton.Index = 737;
-                    ItemButton2.Index = 738;
-                    QuestButton.Index = 198;
-
-                    if (GameScene.User.Inventory.Length == 46)
-                    {
-                        ItemButton2.Index = 169;
-                    }
-
-                    foreach (var grid in QuestGrid)
-                    {
-                        grid.Visible = true;
-                    }
-                }
-            }
-        }
-
-        void Reset()
-        {
-            foreach (MirItemCell grid in QuestGrid)
-            {
-                grid.Visible = false;
-            }
-
-            foreach (MirItemCell grid in Grid)
-            {
-                grid.Visible = false;
-            }
-
-            for (int i = 0; i < LockBar.Length; i++)
-            {
-                LockBar[i].Visible = false;
-            }
-
-            AddButton.Visible = false;
-        }
-
-
-
-        public void RefreshInventory()
-        {
-            Reset();
-
-            ItemButton.Index = 197;
-            ItemButton2.Index = 738;
-            QuestButton.Index = 739;
-
-            if (GameScene.User.Inventory.Length == 46)
-            {
-                ItemButton2.Index = 169;
-            }
-
-            foreach (var grid in Grid)
-            {
-                if (grid.ItemSlot < 46)
-                    grid.Visible = true;
-                else
-                    grid.Visible = false;
-            }
-        }
-
-        public void RefreshInventory2()
-        {
-            Reset();
-
-            ItemButton.Index = 737;
-            ItemButton2.Index = 168;
-            QuestButton.Index = 739;
-
-            foreach (var grid in Grid)
-            {
-                if (grid.ItemSlot < 46 || grid.ItemSlot >= GameScene.User.Inventory.Length)
-                    grid.Visible = false;
-                else
-                    grid.Visible = true;
-            }
-
-            int openLevel = (GameScene.User.Inventory.Length - 46) / 4;
-            for (int i = 0; i < LockBar.Length; i++)
-            {
-                LockBar[i].Visible = (i < openLevel) ? false : true;
-            }
-
-            AddButton.Visible = openLevel >= 10 ? false : true;
-        }
-
-        public void Process()
-        {
-            WeightLabel.Text = GameScene.User.Inventory.Count(t => t == null).ToString();
-            //WeightLabel.Text = (MapObject.User.MaxBagWeight - MapObject.User.CurrentBagWeight).ToString();
-            GoldLabel.Text = GameScene.Gold.ToString("###,###,##0");
-        }
-
-
-        private void WeightBar_BeforeDraw(object sender, EventArgs e)
-        {
-            if (WeightBar.Library == null) return;
-
-            double percent = MapObject.User.CurrentBagWeight / (double)MapObject.User.Stats[Stat.BagWeight];
-            if (percent > 1) percent = 1;
-            if (percent <= 0) return;
-
-            Rectangle section = new Rectangle
-            {
-                Size = new Size((int)((WeightBar.Size.Width - 3) * percent), WeightBar.Size.Height)
-            };
-
-            WeightBar.Library.Draw(WeightBar.Index, section, WeightBar.DisplayLocation, Color.White, false);
-        }
-
-
-        public MirItemCell GetCell(ulong id)
-        {
-            for (int i = 0; i < Grid.Length; i++)
-            {
-                if (Grid[i].Item == null || Grid[i].Item.UniqueID != id) continue;
-                return Grid[i];
-            }
-            return null;
-        }
-
-        public MirItemCell GetQuestCell(ulong id)
-        {
-            return QuestGrid.FirstOrDefault(t => t.Item != null && t.Item.UniqueID == id);
-        }
-
-        public void DisplayItemGridEffect(ulong id, int type = 0)
-        {
-            MirItemCell cell = GetCell(id);
-
-            if (cell.Item == null) return;
-
-            MirAnimatedControl animEffect = null;
-
-            switch (type)
-            {
-                case 0:
-                    animEffect = new MirAnimatedControl
-                    {
-                        Animated = true,
-                        AnimationCount = 9,
-                        AnimationDelay = 150,
-                        Index = 410,
-                        Library = Libraries.Prguse,
-                        Location = cell.Location,
-                        Parent = this,
-                        Loop = false,
-                        NotControl = true,
-                        UseOffSet = true,
-                        Blending = true,
-                        BlendingRate = 1F
-                    };
-                    animEffect.AfterAnimation += (o, e) => animEffect.Dispose();
-                    SoundManager.PlaySound(20000 + (ushort)Spell.MagicShield * 10);
-                    break;
-            }
-        }
-    }
-    public sealed class BeltDialog : MirImageControl
-    {
-        public MirLabel[] Key = new MirLabel[6];
-        public MirButton CloseButton, RotateButton;
-        public MirItemCell[] Grid;
-
-        public BeltDialog()
-        {
-            Index = 1932;
-            Library = Libraries.Prguse;
-            Movable = true;
-            Sort = true;
-            Visible = true;
-            Location = new Point(GameScene.Scene.MainDialog.Location.X + 230, Settings.ScreenHeight - 150);
-
-            BeforeDraw += BeltPanel_BeforeDraw;
-
-            for (int i = 0; i < Key.Length; i++)
-            {
-                Key[i] = new MirLabel
-                {
-                    Parent = this,
-                    Size = new Size(26, 14),
-                    Location = new Point(8 + i * 35, 2),
-                    Text = (i + 1).ToString()
-                };
-            }
-
-            RotateButton = new MirButton
-            {
-                HoverIndex = 1927,
-                Index = 1926,
-                Location = new Point(222, 3),
-                Library = Libraries.Prguse,
-                Parent = this,
-                PressedIndex = 1928,
-                Sound = SoundList.ButtonA,
-                Hint = GameLanguage.Rotate
-            };
-            RotateButton.Click += (o, e) => Flip();
-
-            CloseButton = new MirButton
-            {
-                HoverIndex = 1924,
-                Index = 1923,
-                Location = new Point(222, 19),
-                Library = Libraries.Prguse,
-                Parent = this,
-                PressedIndex = 1925,
-                Sound = SoundList.ButtonA,
-                Hint = string.Format(GameLanguage.Close, CMain.InputKeys.GetKey(KeybindOptions.Belt))
-            };
-            CloseButton.Click += (o, e) => Hide();
-
-            Grid = new MirItemCell[6];
-
-            for (int x = 0; x < 6; x++)
-            {
-                Grid[x] = new MirItemCell
-                {
-                    ItemSlot = x,
-                    Size = new Size(32, 32),
-                    GridType = MirGridType.Inventory,
-                    Library = Libraries.Items,
-                    Parent = this,
-                    Location = new Point(x * 35 + 12, 3),
-                };
-            }
-
-        }
-
-        private void BeltPanel_BeforeDraw(object sender, EventArgs e)
-        {
-            //if Transparent return
-
-            if (Libraries.Prguse != null)
-                Libraries.Prguse.Draw(Index + 1, DisplayLocation, Color.White, false, 0.5F);
-        }
-
-        public void Flip()
-        {
-            //0,70 LOCATION
-            if (Index == 1932)
-            {
-                Index = 1944;
-                Location = new Point(0, 200);
-
-                for (int x = 0; x < 6; x++)
-                    Grid[x].Location = new Point(3, x * 35 + 12);
-
-                CloseButton.Index = 1935;
-                CloseButton.HoverIndex = 1936;
-                CloseButton.Location = new Point(3, 222);
-                CloseButton.PressedIndex = 1937;
-
-                RotateButton.Index = 1938;
-                RotateButton.HoverIndex = 1939;
-                RotateButton.Location = new Point(19, 222);
-                RotateButton.PressedIndex = 1940;
-
-            }
-            else
-            {
-                Index = 1932;
-                Location = new Point(GameScene.Scene.MainDialog.Location.X + 230, Settings.ScreenHeight - 150);
-
-                for (int x = 0; x < 6; x++)
-                    Grid[x].Location = new Point(x * 35 + 12, 3);
-
-                CloseButton.Index = 1923;
-                CloseButton.HoverIndex = 1924;
-                CloseButton.Location = new Point(222, 19);
-                CloseButton.PressedIndex = 1925;
-
-                RotateButton.Index = 1926;
-                RotateButton.HoverIndex = 1927;
-                RotateButton.Location = new Point(222, 3);
-                RotateButton.PressedIndex = 1928;
-            }
-
-            for (int i = 0; i < Key.Length; i++)
-            {
-                Key[i].Location = (Index != 1932) ? new Point(-1, 11 + i * 35) : new Point(8 + i * 35, 2);
-            }
-        }
-
-
-        public MirItemCell GetCell(ulong id)
-        {
-            for (int i = 0; i < Grid.Length; i++)
-            {
-                if (Grid[i].Item == null || Grid[i].Item.UniqueID != id) continue;
-                return Grid[i];
-            }
-            return null;
-        }
-    }
     public sealed class SkillBarDialog : MirImageControl
     {
         private readonly MirButton _switchBindsButton;
@@ -2239,698 +1739,7 @@ namespace Client.MirScenes.Dialogs
             Visible = false;
         }
     }
-    public sealed class CharacterDialog : MirImageControl
-    {
-        public MirButton CloseButton, CharacterButton, StatusButton, StateButton, SkillButton;
-        public MirImageControl CharacterPage, StatusPage, StatePage, SkillPage, ClassImage;
-
-        public MirLabel NameLabel, GuildLabel, LoverLabel;
-        public MirLabel ACLabel, MACLabel, DCLabel, MCLabel, SCLabel, HealthLabel, ManaLabel;
-        public MirLabel CritRLabel, CritDLabel, LuckLabel, AttkSpdLabel, AccLabel, AgilLabel;
-        public MirLabel ExpPLabel, BagWLabel, WearWLabel, HandWLabel, MagicRLabel, PoisonRecLabel, HealthRLabel, ManaRLabel, PoisonResLabel, HolyTLabel, FreezeLabel, PoisonAtkLabel;
-        public MirLabel HeadingLabel, StatLabel;
-        public MirButton NextButton, BackButton;
-
-        public MirItemCell[] Grid;
-        public MagicButton[] Magics;
-
-        public int StartIndex;
-
-        public CharacterDialog()
-        {
-            Index = 504;
-            Library = Libraries.Title;
-            Location = new Point(Settings.ScreenWidth - 264, 0);
-            Movable = true;
-            Sort = true;
-
-            BeforeDraw += (o, e) => RefreshInterface();
-
-            CharacterPage = new MirImageControl
-            {
-                Index = 340,
-                Parent = this,
-                Library = Libraries.Prguse,
-                Location = new Point(8, 90),
-            };
-            CharacterPage.AfterDraw += (o, e) =>
-            {
-                if (Libraries.StateItems == null) return;
-                ItemInfo RealItem = null;
-                if (Grid[(int)EquipmentSlot.Armour].Item != null)
-                {
-                    if (GameScene.User.WingEffect == 1 || GameScene.User.WingEffect == 2)
-                    {
-                        int wingOffset = GameScene.User.WingEffect == 1 ? 2 : 4;
-
-                        int genderOffset = MapObject.User.Gender == MirGender.Male ? 0 : 1;
-
-                        Libraries.Prguse2.DrawBlend(1200 + wingOffset + genderOffset, DisplayLocation, Color.White, true, 1F);
-                    }
-
-                    RealItem = Functions.GetRealItem(Grid[(int)EquipmentSlot.Armour].Item.Info, MapObject.User.Level, MapObject.User.Class, GameScene.ItemInfoList);
-                    Libraries.StateItems.Draw(RealItem.Image, DisplayLocation, Color.White, true, 1F);
-
-                }
-                if (Grid[(int)EquipmentSlot.Weapon].Item != null)
-                {
-                    RealItem = Functions.GetRealItem(Grid[(int)EquipmentSlot.Weapon].Item.Info, MapObject.User.Level, MapObject.User.Class, GameScene.ItemInfoList);
-                    Libraries.StateItems.Draw(RealItem.Image, DisplayLocation, Color.White, true, 1F);
-
-                }
-
-                if (Grid[(int)EquipmentSlot.Helmet].Item != null)
-                    Libraries.StateItems.Draw(Grid[(int)EquipmentSlot.Helmet].Item.Info.Image, DisplayLocation, Color.White, true, 1F);
-                else
-                {
-                    int hair = 441 + MapObject.User.Hair + (MapObject.User.Class == MirClass.Assassin ? 20 : 0) + (MapObject.User.Gender == MirGender.Male ? 0 : 40);
-
-                    int offSetX = MapObject.User.Class == MirClass.Assassin ? (MapObject.User.Gender == MirGender.Male ? 6 : 4) : 0;
-                    int offSetY = MapObject.User.Class == MirClass.Assassin ? (MapObject.User.Gender == MirGender.Male ? 25 : 18) : 0;
-
-                    Libraries.Prguse.Draw(hair, new Point(DisplayLocation.X + offSetX, DisplayLocation.Y + offSetY), Color.White, true, 1F);
-                }
-            };
-
-            StatusPage = new MirImageControl
-            {
-                Index = 506,
-                Parent = this,
-                Library = Libraries.Title,
-                Location = new Point(8, 90),
-                Visible = false,
-            };
-            StatusPage.BeforeDraw += (o, e) =>
-            {
-                ACLabel.Text = string.Format("{0}-{1}", MapObject.User.Stats[Stat.MinAC], MapObject.User.Stats[Stat.MaxAC]);
-                MACLabel.Text = string.Format("{0}-{1}", MapObject.User.Stats[Stat.MinMAC], MapObject.User.Stats[Stat.MaxMAC]);
-                DCLabel.Text = string.Format("{0}-{1}", MapObject.User.Stats[Stat.MinDC], MapObject.User.Stats[Stat.MaxDC]);
-                MCLabel.Text = string.Format("{0}-{1}", MapObject.User.Stats[Stat.MinMC], MapObject.User.Stats[Stat.MaxMC]);
-                SCLabel.Text = string.Format("{0}-{1}", MapObject.User.Stats[Stat.MinSC], MapObject.User.Stats[Stat.MaxSC]);
-                HealthLabel.Text = string.Format("{0}/{1}", MapObject.User.HP, MapObject.User.Stats[Stat.HP]);
-                ManaLabel.Text = string.Format("{0}/{1}", MapObject.User.MP, MapObject.User.Stats[Stat.MP]);
-                CritRLabel.Text = string.Format("{0}%", MapObject.User.Stats[Stat.CriticalRate]);
-                CritDLabel.Text = string.Format("{0}", MapObject.User.Stats[Stat.CriticalDamage]);
-                AttkSpdLabel.Text = string.Format("{0}", MapObject.User.Stats[Stat.AttackSpeed]);
-                AccLabel.Text = string.Format("+{0}", MapObject.User.Stats[Stat.Accuracy]);
-                AgilLabel.Text = string.Format("+{0}", MapObject.User.Stats[Stat.Agility]);
-                LuckLabel.Text = string.Format("{0}", MapObject.User.Stats[Stat.Luck]);
-            };
-
-            StatePage = new MirImageControl
-            {
-                Index = 507,
-                Parent = this,
-                Library = Libraries.Title,
-                Location = new Point(8, 90),
-                Visible = false
-            };
-            StatePage.BeforeDraw += (o, e) =>
-            {
-                ExpPLabel.Text = string.Format("{0:0.##%}", MapObject.User.Experience / (double)MapObject.User.MaxExperience);
-                BagWLabel.Text = string.Format("{0}/{1}", MapObject.User.CurrentBagWeight, MapObject.User.Stats[Stat.BagWeight]);
-                WearWLabel.Text = string.Format("{0}/{1}", MapObject.User.CurrentWearWeight, MapObject.User.Stats[Stat.WearWeight]);
-                HandWLabel.Text = string.Format("{0}/{1}", MapObject.User.CurrentHandWeight, MapObject.User.Stats[Stat.HandWeight]);
-                MagicRLabel.Text = string.Format("+{0}", MapObject.User.Stats[Stat.MagicResist]);
-                PoisonResLabel.Text = string.Format("+{0}", MapObject.User.Stats[Stat.PoisonResist]);
-                HealthRLabel.Text = string.Format("+{0}", MapObject.User.Stats[Stat.HealthRecovery]);
-                ManaRLabel.Text = string.Format("+{0}", MapObject.User.Stats[Stat.SpellRecovery]);
-                PoisonRecLabel.Text = string.Format("+{0}", MapObject.User.Stats[Stat.PoisonRecovery]);
-                HolyTLabel.Text = string.Format("+{0}", MapObject.User.Stats[Stat.Holy]);
-                FreezeLabel.Text = string.Format("+{0}", MapObject.User.Stats[Stat.Freezing]);
-                PoisonAtkLabel.Text = string.Format("+{0}", MapObject.User.Stats[Stat.PoisonAttack]);
-            };
-
-
-            SkillPage = new MirImageControl
-            {
-                Index = 508,
-                Parent = this,
-                Library = Libraries.Title,
-                Location = new Point(8, 90),
-                Visible = false
-            };
-
-
-            CharacterButton = new MirButton
-            {
-                Index = 500,
-                Library = Libraries.Title,
-                Location = new Point(8, 70),
-                Parent = this,
-                PressedIndex = 500,
-                Size = new Size(64, 20),
-                Sound = SoundList.ButtonA,
-            };
-            CharacterButton.Click += (o, e) => ShowCharacterPage();
-            StatusButton = new MirButton
-            {
-                Library = Libraries.Title,
-                Location = new Point(70, 70),
-                Parent = this,
-                PressedIndex = 501,
-                Size = new Size(64, 20),
-                Sound = SoundList.ButtonA
-            };
-            StatusButton.Click += (o, e) => ShowStatusPage();
-
-            StateButton = new MirButton
-            {
-                Library = Libraries.Title,
-                Location = new Point(132, 70),
-                Parent = this,
-                PressedIndex = 502,
-                Size = new Size(64, 20),
-                Sound = SoundList.ButtonA
-            };
-            StateButton.Click += (o, e) => ShowStatePage();
-
-            SkillButton = new MirButton
-            {
-                Library = Libraries.Title,
-                Location = new Point(194, 70),
-                Parent = this,
-                PressedIndex = 503,
-                Size = new Size(64, 20),
-                Sound = SoundList.ButtonA
-            };
-            SkillButton.Click += (o, e) => ShowSkillPage();
-
-            CloseButton = new MirButton
-            {
-                HoverIndex = 361,
-                Index = 360,
-                Location = new Point(241, 3),
-                Library = Libraries.Prguse2,
-                Parent = this,
-                PressedIndex = 362,
-                Sound = SoundList.ButtonA,
-            };
-            CloseButton.Click += (o, e) => Hide();
-
-            NameLabel = new MirLabel
-            {
-                DrawFormat = TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter,
-                Parent = this,
-                Location = new Point(0, 12),
-                Size = new Size(264, 20),
-                NotControl = true,
-            };
-            GuildLabel = new MirLabel
-            {
-                DrawFormat = TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter,
-                Parent = this,
-                Location = new Point(0, 33),
-                Size = new Size(264, 30),
-                NotControl = true,
-            };
-            ClassImage = new MirImageControl
-            {
-                Index = 100,
-                Library = Libraries.Prguse,
-                Location = new Point(15, 33),
-                Parent = this,
-                NotControl = true,
-            };
-
-            Grid = new MirItemCell[Enum.GetNames(typeof(EquipmentSlot)).Length];
-
-            Grid[(int)EquipmentSlot.Weapon] = new MirItemCell
-            {
-                ItemSlot = (int)EquipmentSlot.Weapon,
-                GridType = MirGridType.Equipment,
-                Parent = CharacterPage,
-                Location = new Point(123, 7),
-            };
-
-
-            Grid[(int)EquipmentSlot.Armour] = new MirItemCell
-            {
-                ItemSlot = (int)EquipmentSlot.Armour,
-                GridType = MirGridType.Equipment,
-                Parent = CharacterPage,
-                Location = new Point(163, 7),
-            };
-
-
-            Grid[(int)EquipmentSlot.Helmet] = new MirItemCell
-            {
-                ItemSlot = (int)EquipmentSlot.Helmet,
-                GridType = MirGridType.Equipment,
-                Parent = CharacterPage,
-                Location = new Point(203, 7),
-            };
-
-
-
-            Grid[(int)EquipmentSlot.Torch] = new MirItemCell
-            {
-                ItemSlot = (int)EquipmentSlot.Torch,
-                GridType = MirGridType.Equipment,
-                Parent = CharacterPage,
-                Location = new Point(203, 134),
-            };
-
-
-            Grid[(int)EquipmentSlot.Necklace] = new MirItemCell
-            {
-                ItemSlot = (int)EquipmentSlot.Necklace,
-                GridType = MirGridType.Equipment,
-                Parent = CharacterPage,
-                Location = new Point(203, 98),
-            };
-
-
-            Grid[(int)EquipmentSlot.BraceletL] = new MirItemCell
-            {
-                ItemSlot = (int)EquipmentSlot.BraceletL,
-                GridType = MirGridType.Equipment,
-                Parent = CharacterPage,
-                Location = new Point(8, 170),
-            };
-
-            Grid[(int)EquipmentSlot.BraceletR] = new MirItemCell
-            {
-                ItemSlot = (int)EquipmentSlot.BraceletR,
-                GridType = MirGridType.Equipment,
-                Parent = CharacterPage,
-                Location = new Point(203, 170),
-            };
-
-            Grid[(int)EquipmentSlot.RingL] = new MirItemCell
-            {
-                ItemSlot = (int)EquipmentSlot.RingL,
-                GridType = MirGridType.Equipment,
-                Parent = CharacterPage,
-                Location = new Point(8, 206),
-            };
-
-            Grid[(int)EquipmentSlot.RingR] = new MirItemCell
-            {
-                ItemSlot = (int)EquipmentSlot.RingR,
-                GridType = MirGridType.Equipment,
-                Parent = CharacterPage,
-                Location = new Point(203, 206),
-            };
-
-
-            Grid[(int)EquipmentSlot.Amulet] = new MirItemCell
-            {
-                ItemSlot = (int)EquipmentSlot.Amulet,
-                GridType = MirGridType.Equipment,
-                Parent = CharacterPage,
-                Location = new Point(8, 242),
-            };
-
-
-            Grid[(int)EquipmentSlot.Boots] = new MirItemCell
-            {
-                ItemSlot = (int)EquipmentSlot.Boots,
-                GridType = MirGridType.Equipment,
-                Parent = CharacterPage,
-                Location = new Point(48, 242),
-            };
-
-            Grid[(int)EquipmentSlot.Belt] = new MirItemCell
-            {
-                ItemSlot = (int)EquipmentSlot.Belt,
-                GridType = MirGridType.Equipment,
-                Parent = CharacterPage,
-                Location = new Point(88, 242),
-            };
-
-
-            Grid[(int)EquipmentSlot.Stone] = new MirItemCell
-            {
-                ItemSlot = (int)EquipmentSlot.Stone,
-                GridType = MirGridType.Equipment,
-                Parent = CharacterPage,
-                Location = new Point(128, 242),
-            };
-
-            Grid[(int)EquipmentSlot.Mount] = new MirItemCell
-            {
-                ItemSlot = (int)EquipmentSlot.Mount,
-                GridType = MirGridType.Equipment,
-                Parent = CharacterPage,
-                Location = new Point(203, 62),
-            };
-
-            // STATS I
-            HealthLabel = new MirLabel
-            {
-                AutoSize = true,
-                Parent = StatusPage,
-                Location = new Point(126, 20),
-                NotControl = true,
-                Text = "0-0",
-            };
-
-            ManaLabel = new MirLabel
-            {
-                AutoSize = true,
-                Parent = StatusPage,
-                Location = new Point(126, 38),
-                NotControl = true,
-                Text = "0-0",
-            };
-
-            ACLabel = new MirLabel
-            {
-                AutoSize = true,
-                Parent = StatusPage,
-                Location = new Point(126, 56),
-                NotControl = true,
-                Text = "0-0",
-            };
-
-            MACLabel = new MirLabel
-            {
-                AutoSize = true,
-                Parent = StatusPage,
-                Location = new Point(126, 74),
-                NotControl = true,
-                Text = "0-0",
-            };
-            DCLabel = new MirLabel
-            {
-                AutoSize = true,
-                Parent = StatusPage,
-                Location = new Point(126, 92),
-                NotControl = true,
-                Text = "0-0"
-            };
-            MCLabel = new MirLabel
-            {
-                AutoSize = true,
-                Parent = StatusPage,
-                Location = new Point(126, 110),
-                NotControl = true,
-                Text = "0/0"
-            };
-            SCLabel = new MirLabel
-            {
-                AutoSize = true,
-                Parent = StatusPage,
-                Location = new Point(126, 128),
-                NotControl = true,
-                Text = "0/0"
-            };
-            //Breezer - New Labels
-            CritRLabel = new MirLabel
-            {
-                AutoSize = true,
-                Parent = StatusPage,
-                Location = new Point(126, 146),
-                NotControl = true
-            };
-            CritDLabel = new MirLabel
-            {
-                AutoSize = true,
-                Parent = StatusPage,
-                Location = new Point(126, 164),
-                NotControl = true
-            };
-            AttkSpdLabel = new MirLabel
-            {
-                AutoSize = true,
-                Parent = StatusPage,
-                Location = new Point(126, 182),
-                NotControl = true
-            };
-            AccLabel = new MirLabel
-            {
-                AutoSize = true,
-                Parent = StatusPage,
-                Location = new Point(126, 200),
-                NotControl = true
-            };
-            AgilLabel = new MirLabel
-            {
-                AutoSize = true,
-                Parent = StatusPage,
-                Location = new Point(126, 218),
-                NotControl = true
-            };
-            LuckLabel = new MirLabel
-            {
-                AutoSize = true,
-                Parent = StatusPage,
-                Location = new Point(126, 236),
-                NotControl = true
-            };
-            // STATS II 
-            ExpPLabel = new MirLabel
-            {
-                AutoSize = true,
-                Parent = StatePage,
-                Location = new Point(126, 20),
-                NotControl = true,
-                Text = "0-0",
-            };
-
-            BagWLabel = new MirLabel
-            {
-                AutoSize = true,
-                Parent = StatePage,
-                Location = new Point(126, 38),
-                NotControl = true,
-                Text = "0-0",
-            };
-
-            WearWLabel = new MirLabel
-            {
-                AutoSize = true,
-                Parent = StatePage,
-                Location = new Point(126, 56),
-                NotControl = true,
-                Text = "0-0",
-            };
-
-            HandWLabel = new MirLabel
-            {
-                AutoSize = true,
-                Parent = StatePage,
-                Location = new Point(126, 74),
-                NotControl = true,
-                Text = "0-0",
-            };
-            MagicRLabel = new MirLabel
-            {
-                AutoSize = true,
-                Parent = StatePage,
-                Location = new Point(126, 92),
-                NotControl = true,
-                Text = "0-0"
-            };
-            PoisonResLabel = new MirLabel
-            {
-                AutoSize = true,
-                Parent = StatePage,
-                Location = new Point(126, 110),
-                NotControl = true,
-                Text = "0/0"
-            };
-            HealthRLabel = new MirLabel
-            {
-                AutoSize = true,
-                Parent = StatePage,
-                Location = new Point(126, 128),
-                NotControl = true,
-                Text = "0/0"
-            };
-            //Breezer
-            ManaRLabel = new MirLabel
-            {
-                AutoSize = true,
-                Parent = StatePage,
-                Location = new Point(126, 146),
-                NotControl = true
-            };
-            PoisonRecLabel = new MirLabel
-            {
-                AutoSize = true,
-                Parent = StatePage,
-                Location = new Point(126, 164),
-                NotControl = true
-            };
-            HolyTLabel = new MirLabel
-            {
-                AutoSize = true,
-                Parent = StatePage,
-                Location = new Point(126, 182),
-                NotControl = true
-            };
-            FreezeLabel = new MirLabel
-            {
-                AutoSize = true,
-                Parent = StatePage,
-                Location = new Point(126, 200),
-                NotControl = true
-            };
-            PoisonAtkLabel = new MirLabel
-            {
-                AutoSize = true,
-                Parent = StatePage,
-                Location = new Point(126, 218),
-                NotControl = true
-            };
-
-            Magics = new MagicButton[7];
-
-            for (int i = 0; i < Magics.Length; i++)
-                Magics[i] = new MagicButton { Parent = SkillPage, Visible = false, Location = new Point(8, 8 + i * 33) };
-
-            NextButton = new MirButton
-            {
-                Index = 396,
-                Location = new Point(140, 250),
-                Library = Libraries.Prguse,
-                Parent = SkillPage,
-                PressedIndex = 397,
-                Sound = SoundList.ButtonA,
-            };
-            NextButton.Click += (o, e) =>
-            {
-                if (StartIndex + 7 >= MapObject.User.Magics.Count) return;
-
-                StartIndex += 7;
-                RefreshInterface();
-            };
-
-            BackButton = new MirButton
-            {
-                Index = 398,
-                Location = new Point(90, 250),
-                Library = Libraries.Prguse,
-                Parent = SkillPage,
-                PressedIndex = 399,
-                Sound = SoundList.ButtonA,
-            };
-            BackButton.Click += (o, e) =>
-            {
-                if (StartIndex - 7 < 0) return;
-
-                StartIndex -= 7;
-                RefreshInterface();
-            };
-        }
-
-        public override void Show()
-        {
-            if (Visible) return;
-            Visible = true;
-        }
-
-        public override void Hide()
-        {
-            GameScene.Scene.SocketDialog.Hide();
-            base.Hide();
-        }
-
-        public void ShowCharacterPage()
-        {
-            CharacterPage.Visible = true;
-            StatusPage.Visible = false;
-            StatePage.Visible = false;
-            SkillPage.Visible = false;
-            CharacterButton.Index = 500;
-            StatusButton.Index = -1;
-            StateButton.Index = -1;
-            SkillButton.Index = -1;
-        }
-
-        private void ShowStatusPage()
-        {
-            CharacterPage.Visible = false;
-            StatusPage.Visible = true;
-            StatePage.Visible = false;
-            SkillPage.Visible = false;
-            CharacterButton.Index = -1;
-            StatusButton.Index = 501;
-            StateButton.Index = -1;
-            SkillButton.Index = -1;
-        }
-
-        private void ShowStatePage()
-        {
-            CharacterPage.Visible = false;
-            StatusPage.Visible = false;
-            StatePage.Visible = true;
-            SkillPage.Visible = false;
-            CharacterButton.Index = -1;
-            StatusButton.Index = -1;
-            StateButton.Index = 502;
-            SkillButton.Index = -1;
-        }
-
-        public void ShowSkillPage()
-        {
-            CharacterPage.Visible = false;
-            StatusPage.Visible = false;
-            StatePage.Visible = false;
-            SkillPage.Visible = true;
-            CharacterButton.Index = -1;
-            StatusButton.Index = -1;
-            StateButton.Index = -1;
-            SkillButton.Index = 503;
-            StartIndex = 0;
-        }
-
-        private void RefreshInterface()
-        {
-            int offSet = MapObject.User.Gender == MirGender.Male ? 0 : 1;
-
-            Index = 504;// +offSet;
-            CharacterPage.Index = 340 + offSet;
-
-            switch (MapObject.User.Class)
-            {
-                case MirClass.Warrior:
-                    ClassImage.Index = 100;// + offSet * 5;
-                    break;
-                case MirClass.Wizard:
-                    ClassImage.Index = 101;// + offSet * 5;
-                    break;
-                case MirClass.Taoist:
-                    ClassImage.Index = 102;// + offSet * 5;
-                    break;
-                case MirClass.Assassin:
-                    ClassImage.Index = 103;// + offSet * 5;
-                    break;
-                case MirClass.Archer:
-                    ClassImage.Index = 104;// + offSet * 5;
-                    break;
-            }
-
-            NameLabel.Text = MapObject.User.Name;
-            GuildLabel.Text = MapObject.User.GuildName + " " + MapObject.User.GuildRankName;
-
-            for (int i = 0; i < Magics.Length; i++)
-            {
-                if (i + StartIndex >= MapObject.User.Magics.Count)
-                {
-                    Magics[i].Visible = false;
-                    continue;
-                }
-
-                Magics[i].Visible = true;
-                Magics[i].Update(MapObject.User.Magics[i + StartIndex]);
-            }
-        }
-
-        public MirItemCell GetCell(ulong id)
-        {
-
-            for (int i = 0; i < Grid.Length; i++)
-            {
-                if (Grid[i].Item == null || Grid[i].Item.UniqueID != id) continue;
-                return Grid[i];
-            }
-            return null;
-        }
-
-    }
+    
     public sealed class MiniMapDialog : MirImageControl
     {
         public MirImageControl LightSetting, NewMail;
@@ -3130,7 +1939,7 @@ namespace Client.MirScenes.Dialogs
                 else
                     colour = Color.FromArgb(255, 0, 0);
 
-                DXManager.Sprite.Draw(DXManager.RadarTexture, new Rectangle(0, 0, 2, 2), Vector3.Zero, new Vector3((float)(x - 0.5), (float)(y - 0.5), 0.0F), colour);
+                DXManager.Draw(DXManager.RadarTexture, new Rectangle(0, 0, 2, 2), new Vector3((float)(x - 0.5), (float)(y - 0.5), 0.0F), colour);
 
                 #region NPC Quest Icons
 
@@ -3295,8 +2104,9 @@ namespace Client.MirScenes.Dialogs
         public byte Hair;
         public ushort Level;
         public string LoverName;
+        public bool AllowObserve;
 
-        public MirButton CloseButton, GroupButton, FriendButton, MailButton, TradeButton, LoverButton;
+        public MirButton CloseButton, GroupButton, FriendButton, MailButton, TradeButton, LoverButton, ObserveButton;
         public MirImageControl CharacterPage, ClassImage;
         public MirLabel NameLabel;
         public MirLabel GuildLabel, LoverLabel;
@@ -3462,6 +2272,23 @@ namespace Client.MirScenes.Dialogs
             };
             TradeButton.Click += (o, e) => Network.Enqueue(new C.TradeRequest());
 
+            ObserveButton = new MirButton
+            {
+                Index = 854,
+                HoverIndex = 855,
+                PressedIndex = 856,
+                Location = new Point(16, 357),
+                Library = Libraries.Title,
+                Parent = this,
+                Sound = SoundList.ButtonA,
+                Visible = false,
+                Hint = "Observe",
+            };
+            ObserveButton.Click += (o, e) =>
+            {
+                Network.Enqueue(new C.Observe { Name = Name });
+            };
+
             NameLabel = new MirLabel
             {
                 DrawFormat = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter,
@@ -3617,7 +2444,7 @@ namespace Client.MirScenes.Dialogs
             };
         }
 
-        public void RefreshInferface()
+        public void RefreshInferface(bool IsHero)
         {
             int offSet = Gender == MirGender.Male ? 0 : 1;
 
@@ -3658,6 +2485,14 @@ namespace Client.MirScenes.Dialogs
                 if (Items[i] == null) continue;
                 GameScene.Bind(Items[i]);
             }
+
+            ObserveButton.Visible = AllowObserve;
+
+            TradeButton.Visible = !IsHero;
+            MailButton.Visible = !IsHero;
+            FriendButton.Visible = !IsHero;
+            GroupButton.Visible = !IsHero;
+
         }
 
 
@@ -3670,6 +2505,8 @@ namespace Client.MirScenes.Dialogs
         public MirButton DropViewOn, DropViewOff;
         public MirButton NameViewOn, NameViewOff;
         public MirButton HPViewOn, HPViewOff;
+        public MirButton NewMoveOn, NewMoveOff;
+        public MirButton ObserveOn, ObserveOff;
         public MirImageControl SoundBar, MusicSoundBar;
         public MirImageControl VolumeBar, MusicVolumeBar;
 
@@ -3878,7 +2715,6 @@ namespace Client.MirScenes.Dialogs
             };
             MusicSoundBar.MouseDown += MusicSoundBar_MouseMove;
             MusicSoundBar.MouseMove += MusicSoundBar_MouseMove;
-            MusicSoundBar.MouseUp += MusicSoundBar_MouseUp;
             MusicSoundBar.BeforeDraw += MusicSoundBar_BeforeDraw;
 
             MusicVolumeBar = new MirImageControl
@@ -3890,8 +2726,68 @@ namespace Client.MirScenes.Dialogs
                 NotControl = true,
             };
 
+            NewMoveOn = new MirButton
+            {
+                Library = Libraries.Title,
+                Location = new Point(159, 296),
+                Parent = this,
+                Sound = SoundList.ButtonA,
+                Size = new Size(36, 17),
+                PressedIndex = 853,
+            };
+            NewMoveOn.Click += (o, e) =>
+            {
+                Settings.NewMove = true;
+                GameScene.Scene.ChatDialog.ReceiveChat("[New Movement Style]", ChatType.Hint);
+            };
+
+            NewMoveOff = new MirButton
+            {
+                Library = Libraries.Title,
+                Location = new Point(201, 296),
+                Parent = this,
+                Sound = SoundList.ButtonA,
+                Size = new Size(36, 17),
+                PressedIndex = 850
+            };
+            NewMoveOff.Click += (o, e) =>
+            {
+                Settings.NewMove = false;
+                GameScene.Scene.ChatDialog.ReceiveChat("[Old Movement Style]", ChatType.Hint);
+            };
+
+            ObserveOn = new MirButton
+            {
+                Library = Libraries.Prguse2,
+                Location = new Point(159, 271),
+                Parent = this,
+                Sound = SoundList.ButtonA,
+                Size = new Size(36, 17),
+                PressedIndex = 457,
+            };
+            ObserveOn.Click += (o, e) => ToggleObserve(true);
+
+            ObserveOff = new MirButton
+            {
+                Library = Libraries.Prguse2,
+                Location = new Point(201, 271),
+                Parent = this,
+                Sound = SoundList.ButtonA,
+                Size = new Size(36, 17),
+                PressedIndex = 460
+            };
+            ObserveOff.Click += (o, e) => ToggleObserve(false);
         }
 
+        private void ToggleObserve(bool allow)
+        {
+            if (GameScene.AllowObserve == allow) return;
+
+            Network.Enqueue(new C.Chat
+            {
+                Message = "@ALLOWOBSERVE",
+            });
+        }
 
         public void ToggleSkillButtons(bool Ctrl)
         {
@@ -3916,8 +2812,10 @@ namespace Client.MirScenes.Dialogs
             byte volume = (byte)(p.X / (double)SoundBar.Size.Width * 100);
             Settings.Volume = volume;
 
-
             double percent = Settings.Volume / 100D;
+
+            SoundBar.Hint = $"{Settings.Volume}%";
+
             if (percent > 1) percent = 1;
 
             VolumeBar.Location = percent > 0 ? new Point(159 + (int)((SoundBar.Size.Width - 2) * percent), 218) : new Point(159, 218);
@@ -3928,6 +2826,9 @@ namespace Client.MirScenes.Dialogs
             if (SoundBar.Library == null) return;
 
             double percent = Settings.Volume / 100D;
+
+            SoundBar.Hint = $"{Settings.Volume}%";
+
             if (percent > 1) percent = 1;
             if (percent > 0)
             {
@@ -3948,6 +2849,9 @@ namespace Client.MirScenes.Dialogs
             if (MusicSoundBar.Library == null) return;
 
             double percent = Settings.MusicVolume / 100D;
+
+            MusicSoundBar.Hint = $"{Settings.MusicVolume}%";
+
             if (percent > 1) percent = 1;
             if (percent > 0)
             {
@@ -3963,24 +2867,6 @@ namespace Client.MirScenes.Dialogs
                 MusicVolumeBar.Location = new Point(159, 244);
         }
 
-        public void MusicSoundBar_MouseUp(object sender, MouseEventArgs e)
-        {
-            if (SoundManager.MusicVol <= -2900)
-                SoundManager.MusicVol = -3000;
-            if (SoundManager.MusicVol >= -100)
-                SoundManager.MusicVol = 0;
-
-
-            //SoundManager.Device.Dispose();
-            //SoundManager.Create();
-            //SoundManager.PlayMusic(SoundList.Music, true);
-
-            if (SoundManager.Music == null) return;
-
-            SoundManager.Music.SetVolume(SoundManager.MusicVol);
-
-        }
-
         private void MusicSoundBar_MouseMove(object sender, MouseEventArgs e)
         {
             if (e.Button != MouseButtons.Left || MusicSoundBar != ActiveControl) return;
@@ -3990,8 +2876,10 @@ namespace Client.MirScenes.Dialogs
             byte volume = (byte)(p.X / (double)MusicSoundBar.Size.Width * 100);
             Settings.MusicVolume = volume;
 
-
             double percent = Settings.MusicVolume / 100D;
+
+            MusicSoundBar.Hint = $"{Settings.MusicVolume}%";
+
             if (percent > 1) percent = 1;
 
             MusicVolumeBar.Location = percent > 0 ? new Point(159 + (int)((MusicSoundBar.Size.Width - 2) * percent), 244) : new Point(159, 244);
@@ -4065,7 +2953,27 @@ namespace Client.MirScenes.Dialogs
                 HPViewOff.Index = 467;
             }
 
+            if (Settings.NewMove)
+            {
+                NewMoveOn.Index = 853;
+                NewMoveOff.Index = 848;
+            }
+            else
+            {
+                NewMoveOn.Index = 851;
+                NewMoveOff.Index = 850;
+            }
 
+            if (GameScene.AllowObserve)
+            {
+                ObserveOn.Index = 458;
+                ObserveOff.Index = 459;
+            }
+            else
+            {        
+                ObserveOn.Index = 456;
+                ObserveOff.Index = 461;
+            }
         }
 
     }
@@ -4339,6 +3247,9 @@ namespace Client.MirScenes.Dialogs
         public MirLabel LevelLabel, NameLabel, ExpLabel, KeyLabel;
         public ClientMagic Magic;
         public MirImageControl CoolDown;
+        public bool HeroMagic;
+
+        string[] Prefixes = new string[] { "", "CTRL", "Shift" };
 
         public MagicButton()
         {
@@ -4353,7 +3264,49 @@ namespace Client.MirScenes.Dialogs
                 Location = new Point(36, 0),
                 Sound = SoundList.ButtonA,
             };
-            SkillButton.Click += (o, e) => new AssignKeyPanel(Magic);
+            SkillButton.Click += (o, e) =>
+            {
+                if (HeroMagic)
+                {
+                    if (GameScene.Hero == null || GameScene.Hero.Dead)
+                        return;
+                    new AssignKeyPanel(Magic, 17, new string[]
+                        {
+                            "Shift" + Environment.NewLine + "F1",
+                            "Shift" + Environment.NewLine + "F2",
+                            "Shift" + Environment.NewLine + "F3",
+                            "Shift" + Environment.NewLine + "F4",
+                            "Shift" + Environment.NewLine + "F5",
+                            "Shift" + Environment.NewLine + "F6",
+                            "Shift" + Environment.NewLine + "F7",
+                            "Shift" + Environment.NewLine + "F8"
+                        })
+                    { Actor = GameScene.Hero };
+                }
+                else
+                {
+                    new AssignKeyPanel(Magic, 1, new string[]
+                        {
+                            "F1",
+                            "F2",
+                            "F3",
+                            "F4",
+                            "F5",
+                            "F6",
+                            "F7",
+                            "F8",
+                            "Ctrl" + Environment.NewLine + "F1",
+                            "Ctrl" + Environment.NewLine + "F2",
+                            "Ctrl" + Environment.NewLine + "F3",
+                            "Ctrl" + Environment.NewLine + "F4",
+                            "Ctrl" + Environment.NewLine + "F5",
+                            "Ctrl" + Environment.NewLine + "F6",
+                            "Ctrl" + Environment.NewLine + "F7",
+                            "Ctrl" + Environment.NewLine + "F8"
+                        })
+                    { Actor = GameScene.User };
+                }
+            };
 
             LevelImage = new MirImageControl
             {
@@ -4439,17 +3392,337 @@ namespace Client.MirScenes.Dialogs
                     break;
             }
 
-            if (Magic.Key > 8)
-            {
-                int key = Magic.Key % 8;
+            KeyLabel.Text = Magic.Key == 0 ? string.Empty : string.Format("{0}{1}F{2}",
+                Prefixes[(Magic.Key - 1) / 8],
+                Magic.Key > 8 ? Environment.NewLine : string.Empty,
+                (Magic.Key - 1) % 8 + 1);
 
-                KeyLabel.Text = string.Format("CTRL" + Environment.NewLine + "F{0}", key != 0 ? key : 8);
+            switch (magic.Spell)
+            {  //Warrior
+                case Spell.Fencing:
+                    SkillButton.Hint = string.Format("Fencing\n\nPassive Skill\n\nHitting accuracy will be increased in accordance\nwith practice level.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0);
+                    break;
+                case Spell.Slaying:
+                    SkillButton.Hint = string.Format("Slaying\n\nPassive Skill\n\nHitting accuracy and destructive power will\nbe increased in accordance with practice level.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0);
+                    break;
+                case Spell.Thrusting:
+                    SkillButton.Hint = string.Format("Thrusting\n\nToggle Skill\n\nIncreases the reach of your hits destructive power\nwill increase in accordance with practice level.\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0);
+                    break;
+                case Spell.Rage:
+                    SkillButton.Hint = string.Format("Rage\n\nBuff Skill\nMana Cost {2}\n\nEnhances your inner force to increase its power\nfor a certain time. Attack power and duration time\nwill depend on the skill level. Once the skill has been used\n you will have to wait to use it again.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.ProtectionField:
+                    SkillButton.Hint = string.Format("Protection Field\n\nBuff Skill\nMana Cost {2}\n\nConcentrates inner force and spreads it to all\n the parts of your body. This will enhance the\nprotection from enemies. Defense power and duration\nwill be depend on the skill level. Once the skill\n has been used, you will have to wait to use it again.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.HalfMoon:
+                    SkillButton.Hint = string.Format("Half Moon\n\nToggle Skill\nMana Cost: {2} per attack\n\nCause damage to enemies in a semi circle around the caster with\nthe shock waves from your fast moving weapon.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.FlamingSword:
+                    SkillButton.Hint = string.Format("Flaming Sword\n\nActive Skill\nMana Cost: {2}\n\nSummons the spirit of fire in to your next attack, causing\na devastating blow to the target.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.ShoulderDash:
+                    SkillButton.Hint = string.Format("Shoulder Dash\n\nActive Skill\nMana Cost: {2}\n\nA warrior can push a target backwards by charging\nthem with his shoulder, inflicting damage\nif they hit any obstacle.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.CrossHalfMoon:
+                    SkillButton.Hint = string.Format("Cross Half-Moon\n\nToggle Skill\nMana Cost: {2} per attack\n\nA warrior uses two powerful waves of Half Moon\nto inflict damage on all mobs stood next to them.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.TwinDrakeBlade:
+                    SkillButton.Hint = string.Format("Twin Drake Blade\n\nActive Skill\nMana Cost {2}\n\nThe art of making multiple power attacks.\nIt has a low chance of stunning a target temporarily.\nStunned monsters receive an additional 50% damage.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.Entrapment:
+                    SkillButton.Hint = string.Format("Entrapment\n\nActive Skill\nMana Cost: {2}\n\nParalyses mobs and draws them to the caster.\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.LionRoar:
+                    SkillButton.Hint = string.Format("Lion Roar\n\nActive Skill\nMana Cost: {2}\n\nParalyses enemies around the caster, duration increases with skill level.\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.CounterAttack:
+                    SkillButton.Hint = string.Format("Counter Attack\n\nBuff Skill\nMana Cost {2}\n\nIncreases AC and AMC for a short period of time\nChance to defend an attack and counter.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.ImmortalSkin:
+                    SkillButton.Hint = string.Format("Immortal Skin\n\nBuff Skill\nMana Cost {2}\n\nIncrease defence to reduce attacks.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.Fury:
+                    SkillButton.Hint = string.Format("Fury\n\nBuff Skill\nMana Cost {2}\n\nIncreases the warriors Accuracy for a set period of time.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.SlashingBurst:
+                    SkillButton.Hint = string.Format("Slashing Burst\n\nActive Skill\nMana Cost: {2}\n\nAllows The Warrior to Jump 1 Space Over an Object or Monster.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.BladeAvalanche:
+                    SkillButton.Hint = string.Format("Blade Avalanche\n\nActive Skill\nMana Cost {2}\n\nHurls blades in three directions in front of the\ncaster, creating a deadly storm of metal\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+
+                //Wizard
+                case Spell.FireBall:
+                    SkillButton.Hint = string.Format("Fireball \n\nInstant Casting\nMana Cost {2}\n\nElements of fire are gathered to form\na fireball. Throw at monsters for damage.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.ThunderBolt:
+                    SkillButton.Hint = string.Format("Thunderbolt\n\nInstant Casting\nMana Cost {2}\n\nStrikes the foe with a lightning bolt \ninflicting high damage.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.GreatFireBall:
+                    SkillButton.Hint = string.Format("Great Fireball\n\nInstant Casting\nMana Cost {2}\n\nSuccessor to fire ball, Great Fire Ball causes increased\ndamage to targets.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.Repulsion:
+                    SkillButton.Hint = string.Format("Repulsion\n\nInstant Casting\nMana Cost {2}\n\nPush away surrounding targets using the power of fire.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.HellFire:
+                    SkillButton.Hint = string.Format("Hellfire\n\nInstant Casting\nMana Cost {2}\n\nShoots out a streak of fire attack\nthe monster in front.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.Lightning:
+                    SkillButton.Hint = string.Format("Lightning\n\nInstant Casting\nMana Cost {2}\n\nShoots out a steak of lightning to attack\nthe monster in front.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.ElectricShock:
+                    SkillButton.Hint = string.Format("Electric Shock\n\nInstant Casting\nMana Cost {2}\n\nStrong shock wave hits the mob and the\nmob will not be able to move or the mob\nwill get confused and fight for you.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.Teleport:
+                    SkillButton.Hint = string.Format("Teleport\n\nInstant Casting\nMana Cost {2}\n\nTeleport to a random spot.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.FireWall:
+                    SkillButton.Hint = string.Format("Fire Wall\n\nInstant Casting\nMana Cost {2}\n\nThis skill will build a fire wall at a designated\nspot to attack the monster passing the area.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.FireBang:
+                    SkillButton.Hint = string.Format("Fire Bang\n\nInstant Casting\nMana Cost {2}\n\nFire Bang will burst out fire at a designated spot to\nburn all the monster within the area.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.ThunderStorm:
+                    SkillButton.Hint = string.Format("Thunderstorm \n\nInstant Casting\nMana Cost {2}\n\nCreates a thunder storm around the caster causing\ndamage to all Undead enemies with its range.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.MagicShield:
+                    SkillButton.Hint = string.Format("Magic Shield\n\nInstant Casting\nMana Cost {2}\n\nCreates a protective field around the caster that absorbs damage.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.TurnUndead:
+                    SkillButton.Hint = string.Format("Turn Undead\n\nInstant Casting\nMana Cost {2}\n\nChance to kill any undead target that meets the level requirements, in a single cast.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.IceStorm:
+                    SkillButton.Hint = string.Format("Ice Storm\n\nInstant Castin\nMana Cost {2}\n\nThis skill will make an ice storm with in a designated \narea to attack the monsters with in\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.FlameDisruptor:
+                    SkillButton.Hint = string.Format("Flame Disruptor\n\nInstant Casting\nMana Cost {2}\n\nFlame from the underground will be brought\ninto surface to attack the mobs.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.FrostCrunch:
+                    SkillButton.Hint = string.Format("Frost Crunch\n\nInstant Casting\nMana Cost {2}\n\nFreeze the elements in the air around the \nmonster to slow them down\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.Mirroring:
+                    SkillButton.Hint = string.Format("Mirroring\n\nInstant Casting\nMana Cost {2}\n\nCreate a mirror image of yourself to attack\nthe monsters together\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.FlameField:
+                    SkillButton.Hint = string.Format("Flame Field\n\nInstant Casting\nMana Cost {2}\n\nA powerful spell of fire is used to \ndamage surrounding enemies.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.Vampirism:
+                    SkillButton.Hint = string.Format("Vampirism\n\nInstant Casting\nMana Cost {2}\n\nUsing Mp take away monsters Hp to\nincrease your Hp.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.Blizzard:
+                    SkillButton.Hint = string.Format("Blizzard\n\nChannelling Casting\nMana Cost {2}\n\nConcentrate inner force and spreads it to all\nthe parts of your body.This will enhance the\nprotection from enemies. Defence power and duration\ntime will depend on the skill level. Once the skill\nhas been used, you will have to wait to use it again.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.MeteorStrike:
+                    SkillButton.Hint = string.Format("Meteor Strike\n\nChannelling Casting\nMana Cost {2}\n\nAttacks all monsters within 5x5 square area with lumps \nof fire falling from the sky.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.IceThrust:
+                    SkillButton.Hint = string.Format("Ice Thrust\n\nInstant Casting\nMana Cost {2}\n\nAttack monsters by creating an ice pillar.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.MagicBooster:
+                    SkillButton.Hint = string.Format("Magic Booster\n\nLasting Effect\nMana Cost {2}\n\nIncrease magical damage, but consume additional MP.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.FastMove:
+                    SkillButton.Hint = string.Format("Fast Move\n\nChannelling Casting\nMana Cost {2}\n\nIncrease movement with rooted skills.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.StormEscape:
+                    SkillButton.Hint = string.Format("Storm Escape\n\nChannelling Casting\nMana Cost {2}\n\nParalyze nearby enemies and teleport to the designated location.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.Blink:
+                    SkillButton.Hint = string.Format("Blink\n\nInstant Casting\nMana Cost {2}\n\nTeleport to a random spot near you.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+
+                //Taoist
+                case Spell.SpiritSword:
+                    SkillButton.Hint = string.Format("Spirit Sword\n\nIncreases the chance of hitting the target in\n melee combat.\nPassive Skill\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.Healing:
+                    SkillButton.Hint = string.Format("Healing\n\nInstant Casting\nMana Cost {2}\n\nHeals a single target \nrecovering HP over time.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.Poisoning:
+                    SkillButton.Hint = string.Format("Poisoning\n\nInstant Casting\nMana Cost {2}\n\nRequired Items: Poison Powder\n\nThrow poison at mobs to weaken them.\nUse green poison to weaken Hp.\nUse red poison to weaken defense.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.SoulFireBall:
+                    SkillButton.Hint = string.Format("Soul FireBall\n\nInstant Casting\nMana Cost {2}\n\nRequired Items: Amulet\n\nPut power into a scroll and throw it at \na mob. The scroll will burst into fire.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.SoulShield:
+                    SkillButton.Hint = string.Format("Soul Shield\n\nInstant Casting\nMana Cost {2}\n\nRequired Items: Amulet\n\nBless caster and party members to strengthen their magic\ndefence.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.BlessedArmour:
+                    SkillButton.Hint = string.Format("Blessed Armour\n\nInstant Casting\nMana Cost {2}\n\nRequired Items: Amulet\n\nBless caster and party members to strengthen their defence.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.TrapHexagon:
+                    SkillButton.Hint = string.Format("Trap Hexagon\n\nInstant Casting\nMana Cost {2}\n\nRequired Items: Amulet\n\nTrap the monster with this magical power\n to stop them from moving. Any damages\nfrom outside source will allow the monsters\nto move again.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.SummonSkeleton:
+                    SkillButton.Hint = string.Format("Summon Skeleton\n\nInstant Casting\nMana Cost {2}\n\nSummons a Powerful AOE Skeleton, Which will Fight Side By Side With You\n\nRequired Items: Amulet.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.Hiding:
+                    SkillButton.Hint = string.Format("Hiding\n\nInstant Casting\nMana Cost {2}\n\nRequired Items: Amulet\n\nMobs will not be able to spot you for a short\nmoment.Mobs will notice you if you start\nto move around.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.MassHiding:
+                    SkillButton.Hint = string.Format("Mass-Hiding\n\nInstant Casting\nMana Cost {2}\n\nRequired Items: Amulet\n\nMobs will not be able to spot you or your \nparty members for a short moment. \nMobs will notice you and your party if \nyou start to move around.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.Revelation:
+                    SkillButton.Hint = string.Format("Revelation\n\nInstant Casting\nMana Cost {2}\n\nYou will be able to read Hp of others\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.MassHealing:
+                    SkillButton.Hint = string.Format("Mass-Healing\n\nInstant Casting\nMana Cost {2}\n\nHeal all injured players in the specified\narea by surrounding them with mana.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.SummonShinsu:
+                    SkillButton.Hint = string.Format("Summon Shinsu\n\nInstant Casting\nMana Cost {2}\n\nSummons a Dog, That Will fight Side By Side with you.\nRequired Items: Amulet.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.UltimateEnhancer:
+                    SkillButton.Hint = string.Format("Ultimate Enhancer\n\nInstant Casting\nMana Cost {2}\n\nRequired Items: Amulet\n\nAbsorb the energy from the surroundings to increase the stats.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.EnergyRepulsor:
+                    SkillButton.Hint = string.Format("Energy Repulsor\n\nInstant Casting\nMana Cost {2}\n\nConcentrate your energy for one big blast to push away the monsters around you.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.Purification:
+                    SkillButton.Hint = string.Format("Purification\n\nInstant Casting\nMana Cost {2}\n\nHelp others to recover from poisoning and\nparalysis using this skill.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.SummonHolyDeva:
+                    SkillButton.Hint = string.Format("Summon HolyDeva\n\nInstant Casting\nMana Cost {2}\n\nRequired Items: Amulet\n\nSummon a holy spirit.This holy spirit will\nuse strong thunder to attack monsters.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.Curse:
+                    SkillButton.Hint = string.Format("Curse\n\nInstant Casting\nMana Cost {2}\n\nRequired Items: Amulet + Poison\n\nReduces targets AttackSpeed, DC ,MC and SC.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.Hallucination:
+                    SkillButton.Hint = string.Format("Hallucination\n\nInstant Casting\nMana Cost {2}\n\nRequired Items: Amulet\n\nThe monster will only see hallucination \nand attack anyone on the way\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.Reincarnation:
+                    SkillButton.Hint = string.Format("Reincarnation\n\nInstant Casting\nMana Cost {2}\n\nRequired Items: Amulet\n\nRevives a dead players\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.PoisonCloud:
+                    SkillButton.Hint = string.Format("Poison Cloud\n\nInstant Casting\nMana Cost {2}\n\nRequired Items: GreenPoison\n\nThrow the amulet and a very strong\npoison cloud will appear in the area.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.EnergyShield:
+                    SkillButton.Hint = string.Format("Energy Shield\n\nInstant Casting\nMana Cost {2}\n\nRequired Items: Amulet\n\nCastable on self and friendly targets.\nReflects a percentage of received damage, back to the attacker.\n\nCurrent Skill Level {0}\n\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.Plague:
+                    SkillButton.Hint = string.Format("Plague\n\nInstant Casting\nMana Cost {2}\n\nRequired Items: Amulet + Poison\n\nDecreases targets MP and inflict target with various debuffs\nExample: Stun , Curse , Poison and Slow.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.HealingCircle:
+                    SkillButton.Hint = string.Format("Healing Circle\n\nInstant Casting\nMana Cost {2}\n\nTreatment area friendly target, and the enemy caused spell damage.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.PetEnhancer:
+                    SkillButton.Hint = string.Format("Pet Enhancer\n\nInstant Casting\nMana Cost {2}\n\nStrengthening pets defence and power.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+
+                //Assassin
+                case Spell.FatalSword:
+                    SkillButton.Hint = string.Format("Fatal Sword\n\nPassive Skill\n\nIncrease attack damage on the monsters.\nalso increases accuracy a little.\nPassive Skill\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.DoubleSlash:
+                    SkillButton.Hint = string.Format("Double Slash\n\nToggle Skill\nMana Cost {2} per attack\n\nSlash the monster twice in a quick motion\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.Haste:
+                    SkillButton.Hint = string.Format("Haste\n\nBuff Skill\nMana Cost {2}\n\nIncrease the attack speed\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.FlashDash:
+                    SkillButton.Hint = string.Format("Flash Dash\n\nActive Skill\nMana Cost {2}\n\nAttack a monster with quick slash and\nparalyse the monster\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.HeavenlySword:
+                    SkillButton.Hint = string.Format("Heavenly Sword\n\nActive Skill\nMana Cost {2}\n\nAttack monsters with in 2 steps radius\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.FireBurst:
+                    SkillButton.Hint = string.Format("Fire Burst\n\nActive Skill\nMana Cost {2}\n\nPush away mobs surrounding you\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.Trap:
+                    SkillButton.Hint = string.Format("Trap\n\nInstant casting\nCooldown Time 60 secs\n\nMana Cost {2}\n\nTrap the monster for a short while.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.MoonLight:
+                    SkillButton.Hint = string.Format("Moonlight\n\nBuff Skill\nMana Cost {2}\n\nHide yourself from monster by turning invisible\nGreater damage is done when you attack monster using\nthis skill.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.MPEater:
+                    SkillButton.Hint = string.Format("MP Eater\n\nPassive Skill\n\nAbsorb monsters MP to recharge casters MP\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.SwiftFeet:
+                    SkillButton.Hint = string.Format("Swift Feet\n\nBuff Skill\nMana Cost {2}\n\nIncreased Running Speed whilst active\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.LightBody:
+                    SkillButton.Hint = string.Format("Light Body\n\nBuff Skill\nMana Cost {2}\n\nLighten your body using this skill and move faster\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.PoisonSword:
+                    SkillButton.Hint = string.Format("Poison Sword\n\nActive Skill\nMana Cost {2}\n\nPoison the monsters with a slash of you\nsword.Poison effect will damage the monster\nover time.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.DarkBody:
+                    SkillButton.Hint = string.Format("Dark Body\n\nActive Skill\nMana Cost {2}\n\nCreate an illusion of yourself to attack\nthe monster while you become invisible.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.CrescentSlash:
+                    SkillButton.Hint = string.Format("Crescent Slash\n\nMana Cost {2}\n\nBurst out of the power of your sword and attack all monsters around you.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.Hemorrhage:
+                    SkillButton.Hint = string.Format("Hemorrhage\n\nPassive Skill\n\nChance to deal critical damage and inflict bleeding damage.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.MoonMist:
+                    SkillButton.Hint = string.Format("Moon Mist\n\nBuff Skill\nMana Cost {2}\n\nAbility to hide your self from Monster\nYour first attack will be stronger than normal.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+
+                //Archer
+                case Spell.Focus:
+                    SkillButton.Hint = string.Format("Focus\n\nPassive Skill\n\nIncreases chance to hit with physical attacks.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.StraightShot:
+                    SkillButton.Hint = string.Format("Straight Shot\n\nActive Skill\nMana Cost {2} \n\nInfuses an arrow with mana to deal extra damage.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.DoubleShot:
+                    SkillButton.Hint = string.Format("Double Shot\n\nActive Skill\nMana Cost {2} \n\nFire two arrows in quick succession.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.ExplosiveTrap:
+                    SkillButton.Hint = string.Format("Explosive Trap\n\nTrap Skill\nMana Cost {2} \n\nLay down a row of traps that explode\non contact with an enemy.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.DelayedExplosion:
+                    SkillButton.Hint = string.Format("Delayed Explosion\n\nActive Skill\nMana Cost {2} \n\nFire an arrow that explodes after a short delay.\nUses Elements to cause additional damage.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.Meditation:
+                    SkillButton.Hint = string.Format("Meditation\n\nPassive Skill\n\nEnables gathering of Elements when attacking monsters.\nUp to 4 Total Elements can be gained. \n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.BackStep:
+                    SkillButton.Hint = string.Format("Back Step\n\nActive Skill\nMana Cost {2} \n\nQuickly leap backwards away from danger.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.ElementalShot:
+                    SkillButton.Hint = string.Format("Elemental Shot\n\nActive Skill\nMana Cost {2} \n\nHigh damage magical attack. Damage is increased\nper element. Generates 2 elements if none exist.\nPushes back target if archer is higher level.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.Concentration:
+                    SkillButton.Hint = string.Format("Concentration\n\nBuff Skill\nMana Cost {2} \n\nIncrease the chance of gathering elements whilst active.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.Stonetrap:
+                    SkillButton.Hint = string.Format("Stone Trap\n\nTrap Skill\nMana Cost {2}\n\nLay down a Stone Trap \n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.ElementalBarrier:
+                    SkillButton.Hint = string.Format("Elemental Barrier\n\nBuff Skill\nMana Cost {2}\n\nProtects the caster with an elemental barrier.\nMore elements on cast increases damage reduction.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.SummonVampire:
+                    SkillButton.Hint = string.Format("Summon Vampire\n\nSummoning Skill\nMana Cost {2}\n\nSummons a Vampire Spider to fight by your side.\nVampire Spider will leach enemy HP to heal caster.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.VampireShot:
+                    SkillButton.Hint = string.Format("Vampire Shot\n\nActive Skill\nMana Cost {2}\n\nShoots a Vampire Arrow that leaches enemy HP to heal caster.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.SummonToad:
+                    SkillButton.Hint = string.Format("Summon Toad\n\nSummoning Skill\nMana Cost {2}\n\nSummons a Toad to fight by your side.\nThe toad cannot move and will explode if\nits master leaves its view range.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.PoisonShot:
+                    SkillButton.Hint = string.Format("Poison Shot\n\nActive Skill\nMana Cost {2}\n\nShoots a Poison Arrow that poisons the enemy.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.CrippleShot:
+                    SkillButton.Hint = string.Format("Cripple Shot\n\nActive Skill\nMana Cost {2}\n\nShoots a Cripple Arrow that slows the enemy.\nPoisonShot buff will make Cripple shot produce\na 3×3 AOE poison attack. VampireShot Buff will\nmake Cripple shot hit twice and steal HP.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.SummonSnakes:
+                    SkillButton.Hint = string.Format("Summon Snakes\n\nSummoning Skill\nMana Cost {2}\n\nSummon a Totem that spawns a swarm of snakes that\naggro all monsters nearby and attack with\na chance to paralyse the target.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.NapalmShot:
+                    SkillButton.Hint = string.Format("Napalm Shot\n\nActive Skill\nMana Cost {2}\n\nFire an arrow that explodes in a 5×5 radius around the target.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+                case Spell.OneWithNature:
+                    SkillButton.Hint = string.Format("One With Nature\n\nBuff Skill\nMana Cost {2}\n\nSummon an elemental ring around the caster that\ndeals damage to all targets within a 5×5 radius.\n\nCurrent Skill Level {0}\nNext Level {1}", Magic.Level, Magic.Level == 0 ? Magic.Level1 : Magic.Level == 1 ? Magic.Level2 : Magic.Level == 2 ? Magic.Level3 : 0, Magic.BaseCost);
+                    break;
+
+
+                default:
+
+                    break;
             }
-            else if (Magic.Key > 0)
-                KeyLabel.Text = string.Format("F{0}", Magic.Key);
-            else
-                KeyLabel.Text = string.Empty;
-
+            
 
             SkillButton.Index = Magic.Icon * 2;
             SkillButton.PressedIndex = Magic.Icon * 2 + 1;
@@ -4484,18 +3757,20 @@ namespace Client.MirScenes.Dialogs
     public sealed class AssignKeyPanel : MirImageControl
     {
         public MirButton SaveButton, NoneButton;
-
+        public UserObject Actor;
         public MirLabel TitleLabel;
         public MirImageControl MagicImage;
         public MirButton[] FKeys;
 
         public ClientMagic Magic;
         public byte Key;
+        public byte KeyOffset;
 
-        public AssignKeyPanel(ClientMagic magic)
+        public AssignKeyPanel(ClientMagic magic, byte keyOffset, string[] keyStrings)
         {
             Magic = magic;
             Key = magic.Key;
+            KeyOffset = keyOffset;
 
             Modal = true;
             Index = 710;
@@ -4543,13 +3818,13 @@ namespace Client.MirScenes.Dialogs
             };
             SaveButton.Click += (o, e) =>
             {
-                for (int i = 0; i < MapObject.User.Magics.Count; i++)
+                for (int i = 0; i < Actor.Magics.Count; i++)
                 {
-                    if (MapObject.User.Magics[i].Key == Key)
-                        MapObject.User.Magics[i].Key = 0;
+                    if (Actor.Magics[i].Key == Key)
+                        Actor.Magics[i].Key = 0;
                 }
 
-                Network.Enqueue(new C.MagicKey { Spell = Magic.Spell, Key = Key });
+                Network.Enqueue(new C.MagicKey { Spell = Magic.Spell, Key = Key, OldKey = Magic.Key });
                 Magic.Key = Key;
                 foreach (SkillBarDialog Bar in GameScene.Scene.SkillBarDialogs)
                     Bar.Update();
@@ -4557,201 +3832,26 @@ namespace Client.MirScenes.Dialogs
                 Dispose();
             };
 
+            FKeys = new MirButton[keyStrings.Length];
 
-            FKeys = new MirButton[16];
-
-            FKeys[0] = new MirButton
+            for (byte i = 0; i < FKeys.Length; i++)
             {
-                Index = 0,
-                PressedIndex = 1,
-                Library = Libraries.Prguse,
-                Parent = this,
-                Location = new Point(17, 58),
-                Sound = SoundList.ButtonA,
-                Text = "F1"
-            };
-            FKeys[0].Click += (o, e) => Key = 1;
-
-            FKeys[1] = new MirButton
-            {
-                Index = 0,
-                PressedIndex = 1,
-                Library = Libraries.Prguse,
-                Parent = this,
-                Location = new Point(49, 58),
-                Sound = SoundList.ButtonA,
-                Text = "F2"
-            };
-            FKeys[1].Click += (o, e) => Key = 2;
-
-            FKeys[2] = new MirButton
-            {
-                Index = 0,
-                PressedIndex = 1,
-                Library = Libraries.Prguse,
-                Parent = this,
-                Location = new Point(81, 58),
-                Sound = SoundList.ButtonA,
-                Text = "F3"
-            };
-            FKeys[2].Click += (o, e) => Key = 3;
-
-            FKeys[3] = new MirButton
-            {
-                Index = 0,
-                PressedIndex = 1,
-                Library = Libraries.Prguse,
-                Parent = this,
-                Location = new Point(113, 58),
-                Sound = SoundList.ButtonA,
-                Text = "F4"
-            };
-            FKeys[3].Click += (o, e) => Key = 4;
-
-            FKeys[4] = new MirButton
-            {
-                Index = 0,
-                PressedIndex = 1,
-                Library = Libraries.Prguse,
-                Parent = this,
-                Location = new Point(150, 58),
-                Sound = SoundList.ButtonA,
-                Text = "F5"
-            };
-            FKeys[4].Click += (o, e) => Key = 5;
-
-            FKeys[5] = new MirButton
-            {
-                Index = 0,
-                PressedIndex = 1,
-                Library = Libraries.Prguse,
-                Parent = this,
-                Location = new Point(182, 58),
-                Sound = SoundList.ButtonA,
-                Text = "F6",
-            };
-            FKeys[5].Click += (o, e) => Key = 6;
-
-            FKeys[6] = new MirButton
-            {
-                Index = 0,
-                PressedIndex = 1,
-                Library = Libraries.Prguse,
-                Parent = this,
-                Location = new Point(214, 58),
-                Sound = SoundList.ButtonA,
-                Text = "F7"
-            };
-            FKeys[6].Click += (o, e) => Key = 7;
-
-            FKeys[7] = new MirButton
-            {
-                Index = 0,
-                PressedIndex = 1,
-                Library = Libraries.Prguse,
-                Parent = this,
-                Location = new Point(246, 58),
-                Sound = SoundList.ButtonA,
-                Text = "F8"
-            };
-            FKeys[7].Click += (o, e) => Key = 8;
-
-
-            FKeys[8] = new MirButton
-            {
-                Index = 0,
-                PressedIndex = 1,
-                Library = Libraries.Prguse,
-                Parent = this,
-                Location = new Point(17, 95),
-                Sound = SoundList.ButtonA,
-                Text = "Ctrl" + Environment.NewLine + "F1"
-            };
-            FKeys[8].Click += (o, e) => Key = 9;
-
-            FKeys[9] = new MirButton
-            {
-                Index = 0,
-                PressedIndex = 1,
-                Library = Libraries.Prguse,
-                Parent = this,
-                Location = new Point(49, 95),
-                Sound = SoundList.ButtonA,
-                Text = "Ctrl" + Environment.NewLine + "F2"
-            };
-            FKeys[9].Click += (o, e) => Key = 10;
-
-            FKeys[10] = new MirButton
-            {
-                Index = 0,
-                PressedIndex = 1,
-                Library = Libraries.Prguse,
-                Parent = this,
-                Location = new Point(81, 95),
-                Sound = SoundList.ButtonA,
-                Text = "Ctrl" + Environment.NewLine + "F3"
-            };
-            FKeys[10].Click += (o, e) => Key = 11;
-
-            FKeys[11] = new MirButton
-            {
-                Index = 0,
-                PressedIndex = 1,
-                Library = Libraries.Prguse,
-                Parent = this,
-                Location = new Point(113, 95),
-                Sound = SoundList.ButtonA,
-                Text = "Ctrl" + Environment.NewLine + "F4"
-            };
-            FKeys[11].Click += (o, e) => Key = 12;
-
-            FKeys[12] = new MirButton
-            {
-                Index = 0,
-                PressedIndex = 1,
-                Library = Libraries.Prguse,
-                Parent = this,
-                Location = new Point(150, 95),
-                Sound = SoundList.ButtonA,
-                Text = "Ctrl" + Environment.NewLine + "F5"
-            };
-            FKeys[12].Click += (o, e) => Key = 13;
-
-            FKeys[13] = new MirButton
-            {
-                Index = 0,
-                PressedIndex = 1,
-                Library = Libraries.Prguse,
-                Parent = this,
-                Location = new Point(182, 95),
-                Sound = SoundList.ButtonA,
-                Text = "Ctrl" + Environment.NewLine + "F6"
-            };
-            FKeys[13].Click += (o, e) => Key = 14;
-
-            FKeys[14] = new MirButton
-            {
-                Index = 0,
-                PressedIndex = 1,
-                Library = Libraries.Prguse,
-                Parent = this,
-                Location = new Point(214, 95),
-                Sound = SoundList.ButtonA,
-                Text = "Ctrl" + Environment.NewLine + "F7"
-            };
-            FKeys[14].Click += (o, e) => Key = 15;
-
-            FKeys[15] = new MirButton
-            {
-                Index = 0,
-                PressedIndex = 1,
-                Library = Libraries.Prguse,
-                Parent = this,
-                Location = new Point(246, 95),
-                Sound = SoundList.ButtonA,
-                Text = "Ctrl" + Environment.NewLine + "F8"
-            };
-            FKeys[15].Click += (o, e) => Key = 16;
+                FKeys[i] = new MirButton
+                {
+                    Index = 0,
+                    PressedIndex = 1,
+                    Library = Libraries.Prguse,
+                    Parent = this,
+                    Location = new Point(17 + 32 * (i % 8) + 5 * (i % 8 / 4), 58 + 37 * (i / 8)),
+                    Sound = SoundList.ButtonA,
+                    Text = keyStrings[i]
+                };
+                int num = i + keyOffset;
+                FKeys[i].Click += (o, e) =>
+                {
+                    Key = (byte)num;
+                };
+            }
 
             BeforeDraw += AssignKeyPanel_BeforeDraw;
         }
@@ -4766,129 +3866,12 @@ namespace Client.MirScenes.Dialogs
                 FKeys[i].Visible = true;
             }
 
-            if (Key == 0 || Key > FKeys.Length) return;
+            int key = Key - KeyOffset;
+            if (key < 0 || key > FKeys.Length) return;
 
-            FKeys[Key - 1].Index = 1658;
-            FKeys[Key - 1].HoverIndex = 1658;
-            FKeys[Key - 1].PressedIndex = 1658;
-        }
-    }
-    public sealed class BigMapDialog : MirControl
-    {
-	float ScaleX;
-        float ScaleY;
-	
-        int BigMap_MouseCoordsProcessing_OffsetX, BigMap_MouseCoordsProcessing_OffsetY;
-            
-        public BigMapDialog()
-        {
-            NotControl = false;
-            Location = new Point(130, 100);
-            //Border = true;
-            //BorderColour = Color.Lime;
-            BeforeDraw += (o, e) => OnBeforeDraw();
-            Sort = true;
-	    
-            MouseMove += UpdateBigMapCoordinates;
-        }
-
-	private void UpdateBigMapCoordinates(object sender, MouseEventArgs e)
-        {
-            int MouseCoordsOnBigMap_MapValue_X = (int)((e.Location.X - BigMap_MouseCoordsProcessing_OffsetX) / ScaleX);
-            int MouseCoordsOnBigMap_MapValue_Y = (int)((e.Location.Y - BigMap_MouseCoordsProcessing_OffsetY) / ScaleY);
-	    
-            this.Hint = string.Format("{0},{1}", MouseCoordsOnBigMap_MapValue_X, MouseCoordsOnBigMap_MapValue_Y);
-        }
-
-        private void OnBeforeDraw()
-        {
-            MapControl map = GameScene.Scene.MapControl;
-            if (map == null || !Visible) return;
-
-            //int index = map.BigMap <= 0 ? map.MiniMap : map.BigMap;
-            int index = map.BigMap;
-
-            if (index <= 0)
-            {
-                if (Visible)
-                {
-                    Visible = false;
-                }
-                return;
-            }
-
-            TrySort();
-
-            Rectangle viewRect = new Rectangle(0, 0, 600, 400);
-
-            Size = Libraries.MiniMap.GetSize(index);
-
-            if (Size.Width < 600)
-                viewRect.Width = Size.Width;
-
-            if (Size.Height < 400)
-                viewRect.Height = Size.Height;
-
-            viewRect.X = (Settings.ScreenWidth - viewRect.Width) / 2;
-            viewRect.Y = (Settings.ScreenHeight - 120 - viewRect.Height) / 2;
-
-	    BigMap_MouseCoordsProcessing_OffsetX = viewRect.X;
-            BigMap_MouseCoordsProcessing_OffsetY = viewRect.Y;
-
-            Location = viewRect.Location;
-            Size = viewRect.Size;
-
-            ScaleX = Size.Width / (float)map.Width;
-            ScaleY = Size.Height / (float)map.Height;
-
-            viewRect.Location = new Point(
-                (int)(ScaleX * MapObject.User.CurrentLocation.X) - viewRect.Width / 2,
-                (int)(ScaleY * MapObject.User.CurrentLocation.Y) - viewRect.Height / 2);
-
-            if (viewRect.Right >= Size.Width)
-                viewRect.X = Size.Width - viewRect.Width;
-            if (viewRect.Bottom >= Size.Height)
-                viewRect.Y = Size.Height - viewRect.Height;
-
-            if (viewRect.X < 0) viewRect.X = 0;
-            if (viewRect.Y < 0) viewRect.Y = 0;
-
-            Libraries.MiniMap.Draw(index, Location, Size, Color.FromArgb(255, 255, 255));
-
-            int startPointX = (int)(viewRect.X / ScaleX);
-            int startPointY = (int)(viewRect.Y / ScaleY);
-
-            for (int i = MapControl.Objects.Count - 1; i >= 0; i--)
-            {
-                MapObject ob = MapControl.Objects[i];
-
-
-                if (ob.Race == ObjectType.Item || ob.Dead || ob.Race == ObjectType.Spell) continue; // || (ob.ObjectID != MapObject.User.ObjectID)
-                float x = ((ob.CurrentLocation.X - startPointX) * ScaleX) + Location.X;
-                float y = ((ob.CurrentLocation.Y - startPointY) * ScaleY) + Location.Y;
-
-                Color colour;
-
-                if ((GroupDialog.GroupList.Contains(ob.Name) && MapObject.User != ob) || ob.Name.EndsWith(string.Format("({0})", MapObject.User.Name)))
-                    colour = Color.FromArgb(0, 0, 255);
-                else
-                    if (ob is PlayerObject)
-                    colour = Color.FromArgb(255, 255, 255);
-                else if (ob is NPCObject || ob.AI == 6)
-                    colour = Color.FromArgb(0, 255, 50);
-                else
-                    colour = Color.FromArgb(255, 0, 0);
-
-                DXManager.Sprite.Draw(DXManager.RadarTexture, new Rectangle(0, 0, 2, 2), Vector3.Zero, new Vector3((float)(x - 0.5), (float)(y - 0.5), 0.0F), colour);
-            }
-        }
-
-
-        public void Toggle()
-        {
-            Visible = !Visible;
-
-            Redraw();
+            FKeys[key].Index = 1658;
+            FKeys[key].HoverIndex = 1658;
+            FKeys[key].PressedIndex = 1658;
         }
     }
     public sealed class DuraStatusDialog : MirImageControl
@@ -5168,135 +4151,6 @@ namespace Client.MirScenes.Dialogs
             GameScene.Scene.DuraStatusPanel.Character.Index = 2110;
 
             GetCharacterDura();
-        }
-    }
-
-    public sealed class CustomPanel1 : MirImageControl
-    {
-        public MirButton Button1, Button2, Button3;
-
-        public string AMode, PMode, SMode;
-
-        public CustomPanel1(MirControl parent)
-        {
-            Index = 2179;
-            Library = Libraries.Prguse;
-            Size = new Size(24, 61);
-            Parent = parent;
-
-            Location = new Point(((Settings.ScreenWidth / 2) - (Size.Width / 2)) + 362, Settings.ScreenHeight - Size.Height - 77);
-
-            Button1 = new MirButton //Skill
-            {
-                Index = 2173,
-                HoverIndex = 2174,
-                PressedIndex = 2175,
-                Library = Libraries.Prguse,
-                Parent = this,
-                Size = new Size(16, 16),
-                Location = new Point(3, 3),
-                Hint = "SkillMode"
-            };
-            Button1.Click += (o, e) =>
-            {
-                GameScene.Scene.ChangeSkillMode(null);
-            };
-
-            Button2 = new MirButton //Pet
-            {
-                Index = 2170,
-                HoverIndex = 2171,
-                PressedIndex = 2172,
-                Library = Libraries.Prguse,
-                Parent = this,
-                Size = new Size(16, 16),
-                Location = new Point(3, 20),
-                Hint = "PetMode"
-            };
-            Button2.Click += (o, e) =>
-            {
-                GameScene.Scene.ChangePetMode();
-            };
-
-            Button3 = new MirButton //Player
-            {
-                Index = 2176,
-                HoverIndex = 2177,
-                PressedIndex = 2178,
-                Library = Libraries.Prguse,
-                Parent = this,
-                Size = new Size(16, 16),
-                Location = new Point(3, 37),
-                Hint = "AttackMode"
-            };
-            Button3.Click += (o, e) =>
-            {
-                GameScene.Scene.ChangeAttackMode();
-            };
-        }
-
-        public void Process()
-        {
-            switch (GameScene.Scene.AMode)
-            {
-                case AttackMode.Peace:
-                    AMode = "[Mode: Peaceful]";
-                    break;
-                case AttackMode.Group:
-                    AMode = "[Mode: Group]";
-                    break;
-                case AttackMode.Guild:
-                    AMode = "[Mode: Guild]";
-                    break;
-                case AttackMode.EnemyGuild:
-                    AMode = "[Mode: Enemy Guild]";
-                    break;
-                case AttackMode.RedBrown:
-                    AMode = "[Mode: Red/Brown]";
-                    break;
-                case AttackMode.All:
-                    AMode = "[Mode: Attack All]";
-                    break;
-            }
-
-            switch (GameScene.Scene.PMode)
-            {
-                case PetMode.Both:
-                    PMode = "[Mode: Attack and Move]";
-                    break;
-                case PetMode.MoveOnly:
-                    PMode = "[Mode: Do Not Attack]";
-                    break;
-                case PetMode.AttackOnly:
-                    PMode = "[Mode: Do Not Move]";
-                    break;
-                case PetMode.None:
-                    PMode = "[Mode: Do Not Attack or Move]";
-                    break;
-            }
-
-            switch (Settings.SkillMode)
-            {
-                case true:
-                    SMode = "[Mode: ~]";
-                    break;
-                case false:
-                    SMode = "[Mode: Ctrl]";
-                    break;
-            }
-
-            //GameScene.Scene.MiniMapDialog.AModeLabel.Text = AMode;
-            //GameScene.Scene.MiniMapDialog.PModeLabel.Text = PMode;
-            //GameScene.Scene.MiniMapDialog.SModeLabel.Text = SMode;
-
-            Button1.Hint = string.Format("Skill Mode\r\n{0}", SMode);
-            Button2.Hint = string.Format("Pet Mode ({1})\r\n{0}", PMode, CMain.InputKeys.GetKey(KeybindOptions.ChangePetmode));
-            Button3.Hint = string.Format("Attack Mode ({1})\r\n{0}", AMode, CMain.InputKeys.GetKey(KeybindOptions.ChangeAttackmode));
-        }
-
-        public void Toggle()
-        {
-            Visible = !Visible;
         }
     }
 }
